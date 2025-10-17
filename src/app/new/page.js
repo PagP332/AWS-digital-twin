@@ -14,14 +14,11 @@ export default function Home() {
     <div className="relative flex items-center justify-center bg-background p-8 h-dvh text-center font-inter">
       <FloatingWindow>
         <div className="my-10 mb-15">
-          <h1 className="font-light my-3">Welcome to</h1>
-          <h1 className="font-bold text-3xl mt-5">AWS Digital Twin</h1>
+          <h1 className="font-light text-xl mt-5">Create New User</h1>
         </div>
         <InputField text="Username" />
         <InputField text="Password" />
-        <Button text="Login" onClick={() => console.log("Login")} className="text-background !bg-accent" />
-        <p>or</p>
-        <Button text="Create New User" onClick={() => router.push("/new")} />
+        <Button text="Submit" onClick={() => console.log("Login")} className="text-background !bg-accent" />
       </FloatingWindow>
       <p className="absolute bottom-8 text-xs opacity-50">©2025</p>
       <div className="absolute bottom-8 right-8 flex gap-1">
