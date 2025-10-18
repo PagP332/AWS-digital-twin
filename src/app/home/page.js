@@ -30,7 +30,7 @@ export default function page() {
   const SidebarTabs = ({ children, className, ...props }) => {
     return (
       <button
-        className={`hover:bg-secondary flex w-fit cursor-pointer flex-row items-center rounded-xl p-1 transition-all hover:pl-2 hover:text-white ${className}`}
+        className={`hover:bg-secondary hover:shadow-lg flex w-fit cursor-pointer flex-row items-center rounded-xl p-1 transition-all hover:pl-2 hover:text-white ${className}`}
         {...props}
       >
         {children}
@@ -39,10 +39,10 @@ export default function page() {
   };
   const Sidebar = () => {
     return (
-      <div className="dark:bg-primary flex h-full w-100 flex-col justify-between bg-white p-8 dark:text-white">
+      <div className="dark:bg-primary flex h-full w-100 rounded-r-2xl drop-shadow-2xl flex-col justify-between bg-white p-8 dark:text-white">
         <div>
           <div className="mb-15 flex items-center justify-center">
-            <FloatingWindow className="!bg-background flex-row gap-4">
+            <FloatingWindow className="!bg-background flex-row gap-4 shadow-lg/30 drop-shadow-none">
               <PAGASA size={24} />
               <p className="text-xl font-semibold">Home</p>
             </FloatingWindow>
