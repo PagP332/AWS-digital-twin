@@ -10,12 +10,13 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { testSensorData } from "../../../public/test_data";
+import Canvas3D from "@/components/Canvas3D";
 
 export default function page() {
   // STATES
   const [selectedStationID, setSelectedStationID] = useState(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
-  const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(true);
+  const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(false);
 
   // EFFECTS
 
@@ -35,7 +36,7 @@ export default function page() {
   // UI
   const Sidebar = () => {
     return (
-      <div className="dark:bg-primary flex h-full w-100 rounded-r-2xl drop-shadow-2xl flex-col justify-between bg-white p-8 dark:text-white">
+      <div className="dark:bg-primary z-50 flex h-full w-100 rounded-r-2xl drop-shadow-2xl flex-col justify-between bg-white p-8 dark:text-white">
         <div>
           <div className="mb-15 flex items-center justify-center">
             <FloatingWindow className="!bg-background flex-row gap-4 shadow-lg/30 drop-shadow-none">
@@ -91,7 +92,7 @@ export default function page() {
   };
   const TopInfoView = () => {
     return (
-      <TwinFloatingWindow className="flex-row w-full justify-between mb-1">
+      <TwinFloatingWindow className="z-50 flex-row w-full justify-between mb-1">
         <div className="flex-1 justify-center items-center">
           <p className="font-semibold text-xl mb-1">NAME</p>
           <p className="font-light text-xs opacity-50">
@@ -116,9 +117,12 @@ export default function page() {
   };
   const MainContent = () => {
     return (
-      <div className="flex flex-col bg-background h-full w-full gap-2 p-4">
+      <div className="relative flex flex-col bg-background h-full w-full gap-2 p-4">
         <TopInfoView />
         <SideDataInfo />
+        <div className="z-0 absolute top-0 left-0 w-full h-full">
+          <Canvas3D />
+        </div>
       </div>
     );
   };
