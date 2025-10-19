@@ -1,6 +1,6 @@
 export const testSensorData = [
   {
-    data: "Rainfall",
+    data: "Precipitation",
     value: 0.0,
     unit: " mm",
   },

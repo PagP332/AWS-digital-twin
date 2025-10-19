@@ -106,7 +106,7 @@ export default function page() {
           <LiveClock />
         </div>
         <div className="flex-1 flex flex-col items-end text-end">
-          <StatusIndicator className="flex items-end" type="aasdf" />
+          <StatusIndicator className="flex items-end" type="active" />
           <div className="opacity-50 mt-1">
             <p className="font-semibold text-sm">Last Observed</p>
             <p className="font-light text-xs">date time</p>
