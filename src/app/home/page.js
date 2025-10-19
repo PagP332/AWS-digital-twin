@@ -1,24 +1,23 @@
 "use client";
 import FloatingWindow from "@/components/FloatingWindow";
+import LiveClock from "@/components/LiveClock";
 import Logos, { PAGASA } from "@/components/Logos";
 // import Map from "@/components/Map";
 import Overlay from "@/components/Overlay";
+import StatusIndicator from "@/components/StatusIndicator";
 import { CloudSun, Settings, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
+import { testSensorData } from "../../../public/test_data";
 
 export default function page() {
   // STATES
   const [selectedStationID, setSelectedStationID] = useState(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(true);
 
   // EFFECTS
-  useEffect(() => {
-    if (isMapOpen) {
-      setIsMapOpen(false);
-    }
-  }, [selectedStationID]);
 
   // FUNCTIONS
   const handleWeatherStationClick = () => {
@@ -26,17 +25,14 @@ export default function page() {
     console.log("Open Map");
   };
 
-  // COMPONENTS
-  const SidebarTabs = ({ children, className, ...props }) => {
-    return (
-      <button
-        className={`hover:bg-secondary hover:shadow-lg flex w-fit cursor-pointer flex-row items-center rounded-xl p-1 transition-all hover:pl-2 hover:text-white ${className}`}
-        {...props}
-      >
-        {children}
-      </button>
-    );
+  const handleOnMarkerView = (e) => {
+    setSelectedStationID(e);
+    setIsMapOpen(false);
+    setIsMainContentDisplayer(true);
+    console.log("id selected");
   };
+
+  // UI
   const Sidebar = () => {
     return (
       <div className="dark:bg-primary flex h-full w-100 rounded-r-2xl drop-shadow-2xl flex-col justify-between bg-white p-8 dark:text-white">
@@ -84,6 +80,60 @@ export default function page() {
       </div>
     );
   };
+  const SideDataInfo = () => {
+    return (
+      <div className="inline-grid grid-cols-1 gap-2 justify-start w-1/8">
+        {testSensorData.map((data, index) => {
+          return <DataCell key={index} data={data} />;
+        })}
+      </div>
+    );
+  };
+  const TopInfoView = () => {
+    return (
+      <TwinFloatingWindow className="flex-row w-full justify-between mb-1">
+        <div className="flex-1 justify-center items-center">
+          <p className="font-semibold text-xl mb-1">NAME</p>
+          <p className="font-light text-xs opacity-50">
+            LAT
+            <br />
+            LONG
+          </p>
+        </div>
+        <div className="flex-1 justify-center items-center text-center">
+          <p className="font-semibold text-xs">Current Time</p>
+          <LiveClock />
+        </div>
+        <div className="flex-1 flex flex-col items-end text-end">
+          <StatusIndicator className="flex items-end" type="aasdf" />
+          <div className="opacity-50 mt-1">
+            <p className="font-semibold text-sm">Last Observed</p>
+            <p className="font-light text-xs">date time</p>
+          </div>
+        </div>
+      </TwinFloatingWindow>
+    );
+  };
+  const MainContent = () => {
+    return (
+      <div className="flex flex-col bg-background h-full w-full gap-2 p-4">
+        <TopInfoView />
+        <SideDataInfo />
+      </div>
+    );
+  };
+
+  // COMPONENTS
+  const SidebarTabs = ({ children, className, ...props }) => {
+    return (
+      <button
+        className={`hover:bg-secondary hover:shadow-lg flex w-fit cursor-pointer flex-row items-center rounded-xl p-1 transition-all hover:pl-2 hover:text-white ${className}`}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  };
   const MapOverlay = () => {
     const Map = useMemo(
       () =>
@@ -103,23 +153,42 @@ export default function page() {
           </div>
           <p className="text-center">Please Select a Weather Station</p>
           <div className="border-2 border-secondary h-[75vh] w-[60vw] rounded-xl overflow-hidden">
-            <Map handleSelectStation={(e) => setSelectedStationID(e)} />
+            <Map handleSelectStation={handleOnMarkerView} />
           </div>
         </div>
       </Overlay>
     );
   };
+  const TwinFloatingWindow = ({ children, className, ...props }) => {
+    return (
+      <FloatingWindow
+        className={`flex !px-10 w-fit h-fit rounded-xl shadow-lg/10 drop-shadow-none ${className}`}
+        {...props}
+      >
+        {children}
+      </FloatingWindow>
+    );
+  };
+  const DataCell = ({ data }) => {
+    console.log(data);
+    return (
+      <div className="flex flex-col w-full h-fit z-50 bg-white p-2 px-4 rounded-xl shadow-lg/10 drop-shadow-none">
+        <p className="font-light text-xs text-left whitespace-nowrap">
+          {data.data}
+        </p>
+        <p className="font-semibold text-s text-left whitespace-nowrap">
+          {data.value}
+          {data.unit}
+        </p>
+      </div>
+    );
+  };
 
   return (
-    <div className="font-inter flex h-svh">
+    <div className="font-sfpro flex h-svh">
       {isMapOpen && <MapOverlay />}
       <Sidebar />
-
-      {/* // MAIN CONTENT */}
-      <div className="flex bg-background h-full w-full justify-center items-center">
-        DIGITWIN
-      </div>
-
+      {isMainContentDisplayed && <MainContent />}
       <Logos />
     </div>
   );

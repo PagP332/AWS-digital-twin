@@ -12,13 +12,13 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="bg-background font-inter relative flex h-dvh items-center justify-center p-8 text-center dark:text-white">
+    <div className="bg-background font-sfpro relative flex h-dvh items-center justify-center p-8 text-center dark:text-white">
       <FloatingWindow>
         <div className="my-10 mb-15">
           <h1 className="mt-5 text-xl font-light">Create New User</h1>
         </div>
         <InputField text="Username" />
-        <InputField text="Password" />
+        <InputField text="Password" secret={true} />
         <Button
           text="Submit"
           onClick={() => console.log("Login")}

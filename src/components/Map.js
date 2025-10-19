@@ -46,7 +46,7 @@ export default function Map({ handleSelectStation }) {
       return (
         <Marker key={idx} position={marker.position}>
           <Popup className="relative">
-            <div className="absolute bg-background border-1 border-border rounded-xl w-60 p-4 -top-14 left-0 z-100 font-inter text-black">
+            <div className="absolute bg-background border-1 border-border rounded-xl w-60 p-4 -top-14 left-0 z-100 font-sfpro text-black">
               <div className="space-y-1">
                 <div className="flex flex-row items-center gap-2">
                   <CloudSun size={22} />
