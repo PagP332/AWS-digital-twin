@@ -121,7 +121,7 @@ export default function page() {
         <TopInfoView />
         <SideDataInfo />
         <div className="z-0 absolute top-0 left-0 w-full h-full">
-          <Canvas3D />
+          {/* <Canvas3D /> */}
         </div>
       </div>
     );
