@@ -8,7 +8,6 @@ export const PAGASA = ({ size = 42 }) => {
       alt="pagasa seal"
       width={size}
       height={size}
-      className="dark:drop-shadow-md/50 dark:drop-shadow-white"
     />
   );
 };

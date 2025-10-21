@@ -13,7 +13,7 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="relative font-sfpro flex items-center justify-center bg-background p-8 h-dvh text-center font-sfpro dark:text-white">
+    <div className="relative font-sfpro flex items-center justify-center bg-background p-8 h-dvh text-center font-sfpr">
       <FloatingWindow>
         <div className="my-10 mb-15">
           <h1 className="font-light my-3">Welcome to</h1>

@@ -18,7 +18,7 @@
   --font-sfpro: var(--font-sfpro)
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
   :root {
     --text: rgb(228, 228, 233);
     --background: #0c0c12;
@@ -26,7 +26,7 @@
     --secondary: #383775;
     --accent: #514fbc;
   }
-}
+} */
 
 .leaflet-container {
   width: 100%;

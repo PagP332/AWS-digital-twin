@@ -1,0 +1,12 @@
+{
+  "tabWidth": 2,
+  "useTabs": false,
+  "tailwindFunctions": ["cn", "clsx", "cva"],
+  "customFunctions": ["cn", "clsx", "cva"],
+  "endingPosition": "absolute",
+  "plugins": [
+    "prettier-plugin-classnames",
+    "prettier-plugin-tailwindcss",
+    "prettier-plugin-merge"
+  ]
+}
