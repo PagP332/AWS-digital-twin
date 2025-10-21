@@ -16,6 +16,12 @@ import Button from "@/components/Button";
 export default function page() {
   // STATES
   const [selectedStationID, setSelectedStationID] = useState(null);
+  const [selectedStationPosition, setSelectedStationPosition] = useState([
+    0, 0,
+  ]);
+  const [selectedStationName, setSelectedStationName] = useState("--");
+  const [stationData, setStationData] = useState(testSensorData);
+
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(false);
 
@@ -29,11 +35,13 @@ export default function page() {
     console.log("Open Map");
   };
 
-  const handleOnMarkerView = (e) => {
-    setSelectedStationID(e);
+  const handleOnMarkerView = (id, position, stationName) => {
+    setSelectedStationID(id);
+    setSelectedStationPosition(position);
+    setSelectedStationName(stationName);
+
     setIsMapOpen(false);
     setIsMainContentDisplayer(true);
-    console.log("id selected");
   };
 
   const handleDataCellOnClick = ({ index }) => {
@@ -191,7 +199,7 @@ export default function page() {
   const SideDataInfo = () => {
     return (
       <div className="inline-grid w-1/8 grid-cols-1 justify-start gap-2">
-        {testSensorData.map((data, index) => {
+        {stationData.map((data, index) => {
           return <DataCell key={index} data={data} index={index} />;
         })}
       </div>
@@ -201,11 +209,11 @@ export default function page() {
     return (
       <TwinFloatingWindow className="z-50 mb-1 w-full flex-row justify-between">
         <div className="flex-1 items-center justify-center">
-          <p className="mb-1 text-xl font-semibold">NAME</p>
+          <p className="mb-1 text-xl font-semibold">{selectedStationName}</p>
           <p className="text-xs font-light opacity-50">
-            LAT
+            {selectedStationPosition[0]}
             <br />
-            LONG
+            {selectedStationPosition[1]}
           </p>
         </div>
         <div className="flex-1 items-center justify-center text-center">
