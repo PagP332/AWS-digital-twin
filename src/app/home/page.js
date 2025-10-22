@@ -8,10 +8,19 @@ import StatusIndicator from "@/components/StatusIndicator";
 import { CloudSun, Settings, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { testSensorData } from "../../../public/test_data";
 import Canvas3D from "@/components/Canvas3D";
 import Button from "@/components/Button";
+import {
+  getLatestStationData,
+  getParameterData,
+  parameters,
+} from "@/api/utils.mjs";
+import { formatDateTime } from "@/components/formatDate";
+import { collection, doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/api/route";
+import Graph from "@/components/Graph";
 
 export default function page() {
   // STATES
@@ -20,41 +29,164 @@ export default function page() {
     0, 0,
   ]);
   const [selectedStationName, setSelectedStationName] = useState("--");
-  const [stationData, setStationData] = useState(testSensorData);
+  const [selectedStationLocation, setSelectedStationLocation] = useState("");
+  const [stationData, setStationData] = useState([]);
+  const [lastObserved, setLastObserved] = useState("Not Available");
 
-  const [isMapOpen, setIsMapOpen] = useState(false);
-  const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(false);
+  const [graphData, setGraphData] = useState([]);
+  const [graphParameterInfo, setGraphParameterInfo] = useState(null);
 
   const [parameterSelectedIndex, setParameterSelectedIndex] = useState(null);
 
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(false);
+  const [isGraphOverlayDisplayed, setIsGraphOverlayDisplayed] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(false);
+
   // EFFECTS
+  useEffect(() => {
+    if (selectedStationID) {
+      setIsLoading(true);
+      const fetchStationData = async () => {
+        try {
+          const response = await getLatestStationData(selectedStationID);
+          setStationData(response);
+          setLastObserved(getLatestDatetime(response));
+        } catch (err) {
+          console.error("Failed to fetch station data: ", err);
+        }
+      };
+      fetchStationData();
+      setIsLoading(false);
+    }
+  }, [selectedStationID]);
+
+  useEffect(() => {
+    if (!selectedStationID) return;
+
+    let timeoutId;
+    const handleChange = () => {
+      clearTimeout(timeoutId); // clear any previous timer
+      timeoutId = setTimeout(() => {
+        setIsLoading(true);
+        const fetchStationData = async () => {
+          try {
+            const response = await getLatestStationData(selectedStationID);
+            setStationData(response);
+            setLastObserved(getLatestDatetime(response));
+          } catch (err) {
+            console.error("Failed to fetch station data: ", err);
+          }
+        };
+        fetchStationData();
+        setIsLoading(false);
+      }, 10000); // wait 10 seconds before calling refetch
+    };
+
+    const listeners = parameters.map((parameter) =>
+      onSnapshot(
+        collection(db, `stations/${selectedStationID}/${parameter}`),
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "modified") {
+              console.log("Change detected, refetching data");
+              handleChange();
+            }
+          });
+        },
+      ),
+    );
+
+    return () => {
+      listeners.forEach((unsub) => unsub());
+      clearTimeout(timeoutId);
+    };
+  }, [selectedStationID]);
 
   // FUNCTIONS
   const handleWeatherStationClick = () => {
     setIsMapOpen(true);
     console.log("Open Map");
   };
-
-  const handleOnMarkerView = (id, position, stationName) => {
+  const handleOnMarkerView = (id, position, stationName, location) => {
     setSelectedStationID(id);
     setSelectedStationPosition(position);
     setSelectedStationName(stationName);
+    setSelectedStationLocation(location);
 
     setIsMapOpen(false);
     setIsMainContentDisplayer(true);
   };
-
   const handleDataCellOnClick = ({ index }) => {
     // console.log(data.data);
     // console.log(index);
     setParameterSelectedIndex(index);
   };
-
   const handleCanvasParameterSelect = (index) => {
     if (parameterSelectedIndex === index) {
       setParameterSelectedIndex(null);
     } else {
       setParameterSelectedIndex(index);
+    }
+  };
+  const handleDataCellViewOnClick = async (index, data) => {
+    console.log(index);
+    let parameter;
+    switch (index) {
+      case 0:
+        // console.log("Precipitation");
+        parameter = "precipitation";
+        break;
+      case 1:
+        // console.log("Temperature");
+        parameter = "temperature";
+        break;
+      case 2:
+        // console.log("Humidity");
+        parameter = "humidity";
+        break;
+      case 3:
+        // console.log("Pressure");
+        parameter = "pressure";
+        break;
+      case 4:
+        // console.log("Wind Speed");
+        parameter = "wind-speed";
+        break;
+      case 5:
+        // console.log("Wind Direction");
+        parameter = "wind-direction";
+        break;
+    }
+    const response = await getParameterData(selectedStationID, parameter);
+    setGraphData(response);
+    setGraphParameterInfo(data);
+    setIsGraphOverlayDisplayed(true);
+  };
+
+  // UTILITY
+  const getLatestDatetime = (response) => {
+    if (selectedStationID === "001") {
+      const validTimestamps = response
+        .map((item) => item.datetime)
+        .filter((t) => t && typeof t.toDate === "function")
+        .map((t) => t.toDate().getTime());
+
+      const latestTimestamp = validTimestamps.length
+        ? new Date(Math.max(...validTimestamps))
+        : null;
+
+      const latestDateTime = latestTimestamp
+        ? new Intl.DateTimeFormat("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }).format(latestTimestamp)
+        : "No Data Available";
+
+      return latestDateTime;
+    } else {
+      return formatDateTime(response[0].datetime);
     }
   };
 
@@ -123,10 +255,13 @@ export default function page() {
               {data.value}
               {data.unit}
             </p>
-            <Button text="Details" />
+            <Button
+              text="Details"
+              onClick={() => handleDataCellViewOnClick(index, data)}
+            />
           </div>
           <p className="text-left text-xs font-light whitespace-nowrap opacity-50">
-            {data.time || "Not Available"}
+            {formatDateTime(data.datetime)}
           </p>
         </div>
       );
@@ -211,9 +346,8 @@ export default function page() {
         <div className="flex-1 items-center justify-center">
           <p className="mb-1 text-xl font-semibold">{selectedStationName}</p>
           <p className="text-xs font-light opacity-50">
-            {selectedStationPosition[0]}
-            <br />
-            {selectedStationPosition[1]}
+            {selectedStationLocation} <br />
+            {selectedStationPosition[0]} {selectedStationPosition[1]}
           </p>
         </div>
         <div className="flex-1 items-center justify-center text-center">
@@ -221,29 +355,128 @@ export default function page() {
           <LiveClock />
         </div>
         <div className="flex flex-1 flex-col items-end text-end">
-          <StatusIndicator className="flex items-end" type="active" />
+          <StatusIndicator
+            className="flex items-end"
+            type={lastObserved === "Not Available" ? "unknown" : "active"}
+          />
           <div className="mt-1 opacity-50">
             <p className="text-sm font-semibold">Last Observed</p>
-            <p className="text-xs font-light">date time</p>
+            <p className="text-xs font-light">{lastObserved}</p>
           </div>
         </div>
       </TwinFloatingWindow>
     );
   };
   const MainContent = () => {
-    return (
-      <div
-        className="bg-background relative flex h-full w-full flex-col gap-2 p-4"
-      >
-        <TopInfoView />
-        <SideDataInfo />
-        <div className="absolute top-0 left-0 z-0 h-full w-full">
-          <Canvas3D
-            parameterSelectedIndexProp={parameterSelectedIndex}
-            handleCanvasParameterSelect={handleCanvasParameterSelect}
-          />
+    if (isLoading) {
+      return <div>Loading...</div>;
+    } else {
+      return (
+        <div className="bg-background relative flex h-full w-full flex-col gap-2 p-4">
+          <TopInfoView />
+          <SideDataInfo />
+          <div className="absolute top-0 left-0 z-0 h-full w-full">
+            <Canvas3D
+              parameterSelectedIndexProp={parameterSelectedIndex}
+              handleCanvasParameterSelect={handleCanvasParameterSelect}
+            />
+          </div>
         </div>
-      </div>
+      );
+    }
+  };
+  const GraphOverlay = () => {
+    const tphInfo = {
+      Sensor: "TPH Sensor BME280",
+      "Operating Voltage": "1.71 - 3.6 V",
+      "Operating Voltage": "-40 - 85°C",
+      "Last Maintenance Check": "2025-01-01",
+    };
+
+    const vaneInfo = {
+      Sensor: "RS485 Wind Vane",
+      "Power Voltage": "7 - 24 V",
+      "Measuring Range": "16 directions, 360°",
+      "Last Maintenance Check": "2025-01-01",
+    };
+
+    const windInfo = {
+      Sensor: "RS485 Anemometer",
+      "Power Supply": "12V to 24V DC",
+      "Operating Temperature:": "-40°C to +80°C",
+      "Last Maintenance Check": "2025-01-01",
+    };
+
+    const precipInfo = {
+      Sensor: "WH-SP-RG Rain Gauge",
+      "Operating Temperature:": "-40 ~ + 65 ° C ",
+      "Last Maintenance Check": "2025-01-01",
+    };
+
+    let info;
+    switch (graphParameterInfo.data) {
+      case "Temperature":
+        info = tphInfo;
+        break;
+      case "Pressure":
+        info = tphInfo;
+        break;
+      case "Humidity":
+        info = tphInfo;
+        break;
+      case "Precipitation":
+        info = precipInfo;
+        break;
+      case "Wind Speed":
+        info = windInfo;
+        break;
+      case "Wind Direction":
+        info = tphInfo;
+        break;
+    }
+
+    return (
+      <Overlay handleExitClick={() => setIsGraphOverlayDisplayed(false)}>
+        <div className="flex flex-col items-center justify-center">
+          <p className="text-3xl font-semibold">{graphParameterInfo.data}</p>
+
+          <div className="flex flex-row items-center">
+            <div className="">
+              <div className="mb-4">
+                <>
+                  <p className="text-sm font-light">Parameter</p>
+                  <p className="text-lg font-medium">
+                    {graphParameterInfo.data}
+                  </p>
+                </>
+                <>
+                  <p className="text-sm font-light">Unit</p>
+                  <p className="text-lg font-medium">
+                    {graphParameterInfo.unit}
+                  </p>
+                </>
+                <>
+                  <p className="text-sm font-light">Station ID</p>
+                  <p className="text-lg font-medium">{selectedStationID}</p>
+                </>
+                <>
+                  <p className="text-sm font-light">Last Observed</p>
+                  <p className="text-sm font-medium">
+                    {formatDateTime(graphParameterInfo.datetime)}
+                  </p>
+                </>
+              </div>
+              {Object.entries(info).map(([key, value]) => (
+                <div key={key} className="flex flex-col">
+                  <p className="text-sm font-light">{key}</p>
+                  <p className="text-lg font-medium">{value}</p>
+                </div>
+              ))}
+            </div>
+            <Graph data={graphData} />
+          </div>
+        </div>
+      </Overlay>
     );
   };
 
@@ -252,6 +485,7 @@ export default function page() {
       {isMapOpen && <MapOverlay />}
       <Sidebar />
       {isMainContentDisplayed && <MainContent />}
+      {isGraphOverlayDisplayed && <GraphOverlay />}
       <Logos />
     </div>
   );

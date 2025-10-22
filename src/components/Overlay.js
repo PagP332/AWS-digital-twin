@@ -4,14 +4,20 @@ import FloatingWindow from "./FloatingWindow";
 
 export default function Overlay({ children, handleExitClick }) {
   return (
-    <div className="fixed top-0 left-0 w-full h-full bg-black/50 z-100">
+    <div
+      className="fixed top-0 left-0 z-100 h-full w-full bg-black/50"
+      onClick={handleExitClick}
+    >
       <button
         className="fixed top-4 right-4 cursor-pointer"
         onClick={handleExitClick}
       >
         <X size={32} color={"white"} />
       </button>
-      <div className="flex justify-center items-center h-full">
+      <div
+        className="z-50 flex h-full items-center justify-center"
+        onClick={(e) => e.stopPropagation()}
+      >
         <FloatingWindow>{children}</FloatingWindow>
       </div>
     </div>

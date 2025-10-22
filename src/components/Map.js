@@ -67,7 +67,12 @@ export default function Map({ handleSelectStation }) {
 
   const onMarkerView = (marker) => {
     console.log("Marker Clicked");
-    handleSelectStation(marker.id, marker.position, marker.stationName);
+    handleSelectStation(
+      marker.id,
+      marker.position,
+      marker.stationName,
+      marker.location,
+    );
   };
 
   const MapMarkers = () => {
