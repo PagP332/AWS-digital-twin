@@ -34,7 +34,9 @@ export default function page() {
   const [lastObserved, setLastObserved] = useState("Not Available");
 
   const [graphData, setGraphData] = useState([]);
+  const [graphDataRef, setGraphDataRef] = useState([]);
   const [graphParameterInfo, setGraphParameterInfo] = useState(null);
+  const [filterGraph, setFilterGraph] = useState(5);
 
   const [parameterSelectedIndex, setParameterSelectedIndex] = useState(null);
 
@@ -104,6 +106,12 @@ export default function page() {
     };
   }, [selectedStationID]);
 
+  useEffect(() => {
+    const filteredData = dataCleanup(graphDataRef, filterGraph);
+    setGraphData(filteredData);
+    // console.log(graphData);
+  }, [filterGraph]);
+
   // FUNCTIONS
   const handleWeatherStationClick = () => {
     setIsMapOpen(true);
@@ -160,7 +168,9 @@ export default function page() {
         break;
     }
     const response = await getParameterData(selectedStationID, parameter);
+    // console.log(response);
     setGraphData(response);
+    setGraphDataRef(response);
     setGraphParameterInfo(data);
     setIsGraphOverlayDisplayed(true);
   };
@@ -170,17 +180,30 @@ export default function page() {
     if (selectedStationID === "001") {
       const validTimestamps = response
         .map((item) => item.datetime)
-        .filter((t) => t && typeof t.toDate === "function")
-        .map((t) => t.toDate().getTime());
+        .filter((t) => t)
+        .map((t) => {
+          if (typeof t.toDate === "function") {
+            // Firestore Timestamp object
+            return t.toDate().getTime();
+          } else if (typeof t === "string") {
+            // String format: "YYYY-MM-DD HH:mm:ss"
+            const normalized = t.replace(" ", "T"); // convert to ISO-like format
+            return new Date(normalized).getTime();
+          }
+          return null;
+        })
+        .filter((time) => !isNaN(time));
 
       const latestTimestamp = validTimestamps.length
         ? new Date(Math.max(...validTimestamps))
         : null;
 
+      console.log(`latest timestamp ${latestTimestamp}`);
+
       const latestDateTime = latestTimestamp
         ? new Intl.DateTimeFormat("en-US", {
             dateStyle: "medium",
-            timeStyle: "short",
+            timeStyle: "medium",
           }).format(latestTimestamp)
         : "No Data Available";
 
@@ -188,6 +211,43 @@ export default function page() {
     } else {
       return formatDateTime(response[0].datetime);
     }
+  };
+  const dataCleanup = (data, filterGraph = 5) => {
+    if (!data || data.length === 0) return [];
+
+    // Determine time field key (timestamp for 001, date for others)
+    const timeKey = data[0].timestamp ? "timestamp" : "date";
+
+    // Determine time cutoff based on filterGraph value
+    const now = new Date();
+    let cutoff = null;
+
+    switch (filterGraph) {
+      case 1: // 1 hour
+        cutoff = new Date(now.getTime() - 1 * 60 * 60 * 1000);
+        break;
+      case 2: // 24 hours
+        cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 3: // 7 days
+        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 4: // 1 month (30 days)
+        cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 5: // All data
+      default:
+        cutoff = null;
+        break;
+    }
+
+    // Filter data (if cutoff exists)
+    const filtered = cutoff
+      ? data.filter((e) => new Date(e[timeKey]) >= cutoff)
+      : data;
+
+    // Map to unified format and reverse for ascending order
+    return filtered.sort((a, b) => new Date(a[timeKey]) - new Date(b[timeKey]));
   };
 
   // COMPONENTS
@@ -269,7 +329,7 @@ export default function page() {
       return (
         <div
           onClick={() => handleDataCellOnClick({ data, index })}
-          className={`hover:bg-accent z-50 flex h-fit w-full cursor-pointer flex-col rounded-xl bg-white p-2 px-4 shadow-lg/10 drop-shadow-none transition-all hover:ml-2 hover:text-white`}
+          className={`hover:bg-accent z-50 flex h-fit w-fit min-w-full cursor-pointer flex-col rounded-xl bg-white p-2 px-4 shadow-lg/10 drop-shadow-none transition-all hover:ml-2 hover:text-white`}
         >
           <p className="text-left text-xs font-light whitespace-nowrap">
             {data.data}
@@ -281,6 +341,27 @@ export default function page() {
         </div>
       );
     }
+  };
+  const FilterButtons = () => {
+    const Button = ({ text, onClick, ind }) => {
+      return (
+        <div
+          className={`border-primary hover:bg-secondary/50 cursor-pointer rounded-md border-1 p-1 ${ind === filterGraph ? "bg-secondary/50" : ""}`}
+          onClick={onClick}
+        >
+          <p className="text-xs font-light">{text}</p>
+        </div>
+      );
+    };
+    return (
+      <div className="flex justify-end gap-1">
+        <Button ind={1} text="1h" onClick={() => setFilterGraph(1)} />
+        <Button ind={2} text="24h" onClick={() => setFilterGraph(2)} />
+        <Button ind={3} text="7d" onClick={() => setFilterGraph(3)} />
+        <Button ind={4} text="1m" onClick={() => setFilterGraph(4)} />
+        <Button ind={5} text="ALL" onClick={() => setFilterGraph(5)} />
+      </div>
+    );
   };
 
   // UI
@@ -304,7 +385,9 @@ export default function page() {
         <div>
           <SidebarTabs>
             <Settings size={14} />
-            <p className="ml-1 text-xs font-medium">Account Settings</p>
+            <Link href="/" className="ml-1 text-xs font-medium">
+              Account Settings
+            </Link>
           </SidebarTabs>
           <div className="flex flex-col gap-1">
             <p className="mt-4 mb-2 text-xs opacity-50">LEARN MORE</p>
@@ -431,7 +514,7 @@ export default function page() {
         info = windInfo;
         break;
       case "Wind Direction":
-        info = tphInfo;
+        info = vaneInfo;
         break;
     }
 
@@ -439,7 +522,6 @@ export default function page() {
       <Overlay handleExitClick={() => setIsGraphOverlayDisplayed(false)}>
         <div className="flex flex-col items-center justify-center">
           <p className="text-3xl font-semibold">{graphParameterInfo.data}</p>
-
           <div className="flex flex-row items-center">
             <div className="">
               <div className="mb-4">
@@ -473,7 +555,10 @@ export default function page() {
                 </div>
               ))}
             </div>
-            <Graph data={graphData} />
+            <div>
+              <FilterButtons />
+              <Graph data={graphData} stationID={selectedStationID} />
+            </div>
           </div>
         </div>
       </Overlay>

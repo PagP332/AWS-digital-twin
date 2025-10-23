@@ -1,27 +1,34 @@
 "use client";
-import test, {
-  getLatestStationData,
-  getParameterData,
-  getStationsList,
-  populateStations,
-} from "@/api/utils.mjs";
-import Button from "@/components/Button";
-import Canvas3D from "@/components/Canvas3D";
-import Graph from "@/components/Graph";
 import { useState } from "react";
 
 export default function page() {
-  const [data, setData] = useState(null);
+  const [filterGraph, setFilterGraph] = useState(5);
 
-  const handleOnClick = async () => {
-    const data = await getParameterData("98", "temperature");
-    setData(data);
+  const FilterButtons = () => {
+    const Button = ({ text, onClick, ind }) => {
+      return (
+        <div
+          className={`border-primary hover:bg-secondary/50 cursor-pointer rounded-md border-1 p-1 ${ind === filterGraph ? "bg-secondary/50" : ""}`}
+          onClick={onClick}
+        >
+          <p className="text-xs font-light">{text}</p>
+        </div>
+      );
+    };
+    return (
+      <div className="flex justify-end gap-1">
+        <Button ind={1} text="1h" onClick={() => setFilterGraph(1)} />
+        <Button ind={2} text="24h" onClick={() => setFilterGraph(2)} />
+        <Button ind={3} text="7d" onClick={() => setFilterGraph(3)} />
+        <Button ind={4} text="1m" onClick={() => setFilterGraph(4)} />
+        <Button ind={5} text="ALL" onClick={() => setFilterGraph(5)} />
+      </div>
+    );
   };
 
   return (
     <div className="flex h-screen w-screen items-center justify-center">
-      <Button text="click me" onClick={handleOnClick} />
-      {data && <Graph data={data} />}
+      <FilterButtons />
     </div>
   );
 }

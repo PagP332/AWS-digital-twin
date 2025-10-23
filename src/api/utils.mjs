@@ -137,17 +137,27 @@ export async function getLatestStationData(stationID) {
       if (stationID === "001") {
         // If Station is Replica
         const stationRef = collection(db, `stations/${stationID}/${parameter}`);
-        const q = query(stationRef, orderBy("dateTime", "desc"), limit(1));
+        const q = query(stationRef, orderBy("timestamp", "desc"), limit(1));
         const docResponse = await getDocs(q);
 
         const doc = docResponse.docs[0];
-        if (!doc) return null;
+        if (!doc) return { parameter };
 
-        return {
-          parameter,
-          id: doc.id,
-          ...doc.data(),
-        };
+        if (parameter === "wind-direction") {
+          return {
+            parameter,
+            id: doc.id,
+            dateTime: doc.data().timestamp,
+            value: `${doc.data().value}`,
+          };
+        } else {
+          return {
+            parameter,
+            id: doc.id,
+            dateTime: doc.data().timestamp,
+            value: doc.data().value,
+          };
+        }
       } else {
         // If Station is PAGASA
         const stationRef = doc(
@@ -253,7 +263,7 @@ export async function getParameterData(stationID, parameter) {
   console.log(`Fetching ${parameter} data of station id ${stationID}`);
   if (stationID === "001") {
     const stationRef = collection(db, `stations/${stationID}/${parameter}`);
-    const q = query(stationRef, orderBy("dateTime", "desc"));
+    const q = query(stationRef, orderBy("timestamp", "desc"));
     const docResponse = await getDocs(q);
     const data = docResponse.docs.map((doc) => doc.data()).reverse();
 
@@ -266,7 +276,7 @@ export async function getParameterData(stationID, parameter) {
       ? [...rawData.values].sort((a, b) => new Date(a.date) - new Date(b.date))
       : [];
 
-    console.log(data);
+    // console.log(data);
     return data;
   }
 }
