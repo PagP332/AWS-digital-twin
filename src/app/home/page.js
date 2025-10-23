@@ -8,7 +8,13 @@ import StatusIndicator from "@/components/StatusIndicator";
 import { CloudSun, Settings, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { testSensorData } from "../../../public/test_data";
 import Canvas3D from "@/components/Canvas3D";
 import Button from "@/components/Button";
@@ -22,7 +28,7 @@ import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/api/route";
 import Graph from "@/components/Graph";
 
-export default function page() {
+export default function Home() {
   // STATES
   const [selectedStationID, setSelectedStationID] = useState(null);
   const [selectedStationPosition, setSelectedStationPosition] = useState([
@@ -45,6 +51,69 @@ export default function page() {
   const [isGraphOverlayDisplayed, setIsGraphOverlayDisplayed] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
+
+  // FUNCTIONS
+  const handleWeatherStationClick = () => {
+    setIsMapOpen(true);
+    console.log("Open Map");
+  };
+  const handleOnMarkerView = (id, position, stationName, location) => {
+    setSelectedStationID(id);
+    setSelectedStationPosition(position);
+    setSelectedStationName(stationName);
+    setSelectedStationLocation(location);
+
+    setIsMapOpen(false);
+    setIsMainContentDisplayer(true);
+  };
+  const handleDataCellOnClick = ({ index }) => {
+    // console.log(data.data);
+    // console.log(index);
+    setParameterSelectedIndex(index);
+  };
+  const handleCanvasParameterSelect = (index) => {
+    if (parameterSelectedIndex === index) {
+      setParameterSelectedIndex(null);
+    } else {
+      setParameterSelectedIndex(index);
+    }
+  };
+  const handleDataCellViewOnClick = async (index, data) => {
+    console.log(index);
+    let parameter;
+    switch (index) {
+      case 0:
+        // console.log("Precipitation");
+        parameter = "precipitation";
+        break;
+      case 1:
+        // console.log("Temperature");
+        parameter = "temperature";
+        break;
+      case 2:
+        // console.log("Humidity");
+        parameter = "humidity";
+        break;
+      case 3:
+        // console.log("Pressure");
+        parameter = "pressure";
+        break;
+      case 4:
+        // console.log("Wind Speed");
+        parameter = "wind-speed";
+        break;
+      case 5:
+        // console.log("Wind Direction");
+        parameter = "wind-direction";
+        break;
+    }
+    const response = await getParameterData(selectedStationID, parameter);
+    // console.log(response);
+    setGraphData(response);
+    setGraphDataRef(response);
+    setGraphParameterInfo(data);
+    setIsGraphOverlayDisplayed(true);
+  };
 
   // EFFECTS
   useEffect(() => {
@@ -110,73 +179,10 @@ export default function page() {
     const filteredData = dataCleanup(graphDataRef, filterGraph);
     setGraphData(filteredData);
     // console.log(graphData);
-  }, [filterGraph]);
-
-  // FUNCTIONS
-  const handleWeatherStationClick = () => {
-    setIsMapOpen(true);
-    console.log("Open Map");
-  };
-  const handleOnMarkerView = (id, position, stationName, location) => {
-    setSelectedStationID(id);
-    setSelectedStationPosition(position);
-    setSelectedStationName(stationName);
-    setSelectedStationLocation(location);
-
-    setIsMapOpen(false);
-    setIsMainContentDisplayer(true);
-  };
-  const handleDataCellOnClick = ({ index }) => {
-    // console.log(data.data);
-    // console.log(index);
-    setParameterSelectedIndex(index);
-  };
-  const handleCanvasParameterSelect = (index) => {
-    if (parameterSelectedIndex === index) {
-      setParameterSelectedIndex(null);
-    } else {
-      setParameterSelectedIndex(index);
-    }
-  };
-  const handleDataCellViewOnClick = async (index, data) => {
-    console.log(index);
-    let parameter;
-    switch (index) {
-      case 0:
-        // console.log("Precipitation");
-        parameter = "precipitation";
-        break;
-      case 1:
-        // console.log("Temperature");
-        parameter = "temperature";
-        break;
-      case 2:
-        // console.log("Humidity");
-        parameter = "humidity";
-        break;
-      case 3:
-        // console.log("Pressure");
-        parameter = "pressure";
-        break;
-      case 4:
-        // console.log("Wind Speed");
-        parameter = "wind-speed";
-        break;
-      case 5:
-        // console.log("Wind Direction");
-        parameter = "wind-direction";
-        break;
-    }
-    const response = await getParameterData(selectedStationID, parameter);
-    // console.log(response);
-    setGraphData(response);
-    setGraphDataRef(response);
-    setGraphParameterInfo(data);
-    setIsGraphOverlayDisplayed(true);
-  };
+  }, [filterGraph, graphDataRef]);
 
   // UTILITY
-  const getLatestDatetime = (response) => {
+  const getLatestDatetime = useCallback((response) => {
     if (selectedStationID === "001") {
       const validTimestamps = response
         .map((item) => item.datetime)
@@ -211,7 +217,7 @@ export default function page() {
     } else {
       return formatDateTime(response[0].datetime);
     }
-  };
+  });
   const dataCleanup = (data, filterGraph = 5) => {
     if (!data || data.length === 0) return [];
 

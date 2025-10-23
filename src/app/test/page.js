@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export default function page() {
+export default function Test() {
   const [filterGraph, setFilterGraph] = useState(5);
 
   const FilterButtons = () => {
