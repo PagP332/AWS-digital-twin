@@ -160,7 +160,11 @@ export default function Home() {
         collection(db, `stations/${selectedStationID}/${parameter}`),
         (snapshot) => {
           snapshot.docChanges().forEach((change) => {
-            if (change.type === "modified") {
+            if (
+              change.type === "modified" ||
+              change.type === "added" ||
+              change.type === "removed"
+            ) {
               console.log("Change detected, refetching data");
               handleChange();
             }
