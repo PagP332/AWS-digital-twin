@@ -15,7 +15,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { testSensorData } from "../../../public/test_data";
 import Canvas3D from "@/components/Canvas3D";
 import Button from "@/components/Button";
 import {
@@ -27,6 +26,7 @@ import { formatDateTime } from "@/components/formatDate";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/api/route";
 import Graph from "@/components/Graph";
+import { SyncLoader } from "react-spinners";
 
 export default function Home() {
   // STATES
@@ -51,6 +51,7 @@ export default function Home() {
   const [isGraphOverlayDisplayed, setIsGraphOverlayDisplayed] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // FUNCTIONS
   const handleWeatherStationClick = () => {
@@ -138,6 +139,7 @@ export default function Home() {
 
     let timeoutId;
     const handleChange = () => {
+      setIsUpdating(true);
       clearTimeout(timeoutId); // clear any previous timer
       timeoutId = setTimeout(() => {
         setIsLoading(true);
@@ -152,7 +154,8 @@ export default function Home() {
         };
         fetchStationData();
         setIsLoading(false);
-      }, 10000); // wait 10 seconds before calling refetch
+        setIsUpdating(false);
+      }, 5000); // wait 10 seconds before calling refetch
     };
 
     const listeners = parameters.map((parameter) =>
@@ -474,6 +477,14 @@ export default function Home() {
               handleCanvasParameterSelect={handleCanvasParameterSelect}
             />
           </div>
+          {isUpdating && (
+            <div className="absolute bottom-5 left-5 z-80 inline-flex items-center gap-2">
+              <SyncLoader color="#514fbc" size={5} />
+              <p className="text-sm font-semibold text-[#514fbc]">
+                Updating...
+              </p>
+            </div>
+          )}
         </div>
       );
     }
