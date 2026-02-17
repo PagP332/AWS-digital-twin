@@ -21,6 +21,7 @@ import {
   diagnoseData,
   getAlertsList,
   getLatestStationData,
+  getOtherData,
   getParameterData,
   modelStatusCheck,
   parameters,
@@ -51,6 +52,7 @@ export default function Home() {
   const [selectedStationName, setSelectedStationName] = useState("--");
   const [selectedStationLocation, setSelectedStationLocation] = useState("");
   const [stationData, setStationData] = useState([]);
+  const [stationOtherData, setStationOtherData] = useState([]);
   const [lastObserved, setLastObserved] = useState("Not Available");
 
   const [alertsList, setAlertsList] = useState([]);
@@ -75,6 +77,7 @@ export default function Home() {
   const [isNewAlertDisplayed, setIsNewAlertDisplayed] = useState(false);
   const [isAlertsDetailsDisplayed, setIsAlertsDetailsDisplayed] =
     useState(false);
+  const [isOtherDataDisplayed, setIsOtherDataDisplayed] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -132,6 +135,15 @@ export default function Home() {
       case 5:
         // console.log("Wind Direction");
         parameter = "wind-direction";
+        break;
+      case 6:
+        parameter = "voltage";
+        break;
+      case 7:
+        parameter = "dht-temp";
+        break;
+      case 8:
+        parameter = "dht-hum";
         break;
     }
     const response = await getParameterData(selectedStationID, parameter);
@@ -249,7 +261,9 @@ export default function Home() {
         try {
           const response = await getLatestStationData(selectedStationID);
           const latestTime = await getLatestDatetime(response);
+          const otherData = await getOtherData(selectedStationID);
 
+          setStationOtherData(otherData);
           setStationData(response);
           setLastObserved(latestTime);
           if (selectedStationID === "001")
@@ -276,7 +290,9 @@ export default function Home() {
           console.log("Change detected, Refetching data...");
           const response = await getLatestStationData(selectedStationID);
           const latestTime = await getLatestDatetime(response);
+          const otherData = await getOtherData(selectedStationID);
 
+          setStationOtherData(otherData);
           setStationData(response);
           setLastObserved(latestTime);
           if (selectedStationID === "001")
@@ -405,7 +421,7 @@ export default function Home() {
         .map((c) => ({ id: c.doc.id, ...c.doc.data() }));
 
       if (updatedMessages.length === 0) return;
-      console.log("Alerts updated:", updatedMessages);
+      // console.log("Alerts updated:", updatedMessages);
       setAlertsList((prev) => {
         const byId = new Map((prev || []).map((a) => [a.id, a]));
         const newItems = [];
@@ -472,18 +488,22 @@ export default function Home() {
       </FloatingWindow>
     );
   };
-  const DataCell = ({ data, index, dataContext }) => {
-    // console.log(dataContext);
+  const DataCell = ({ data, index, dataContext, details }) => {
     let value, unit;
     if (data.data === "Wind Direction") {
       const windSpeed =
         dataContext.find((d) => d.data === "Wind Speed")?.value || 0;
+      // console.log(dataContext);
+      // console.log("wind speed for direction: ", windSpeed);
       if (windSpeed === 0) {
         value = "--";
         unit = "";
+      } else {
+        value = data.value;
+        unit = data.unit;
       }
     } else {
-      value = data.value;
+      value = data.value.toFixed(4);
       unit = data.unit;
     }
     if (parameterSelectedIndex === index) {
@@ -497,16 +517,16 @@ export default function Home() {
             {data.data}
           </p>
           <div className="flex flex-row items-center justify-between gap-10">
-            <p
-              className="flex text-left text-xl font-semibold whitespace-nowrap"
-            >
-              {data.value}
-              {data.unit}
+            <p className="flex text-left text-xl font-semibold whitespace-nowrap">
+              {value}
+              {unit}
             </p>
-            <Button
-              text="Details"
-              onClick={() => handleDataCellViewOnClick(index, data)}
-            />
+            {details && (
+              <Button
+                text="Details"
+                onClick={() => handleDataCellViewOnClick(index, data)}
+              />
+            )}
           </div>
           <p className="text-left text-xs font-light whitespace-nowrap opacity-50">
             {formatDateTime(data.datetime)}
@@ -629,9 +649,30 @@ export default function Home() {
               data={data}
               index={index}
               dataContext={stationData}
+              details={true}
             />
           );
         })}
+        <div
+          onClick={() => setIsOtherDataDisplayed((prev) => !prev)}
+          className={`hover:bg-accent z-50 my-3 flex h-fit w-fit min-w-full cursor-pointer flex-col rounded-xl bg-white p-2 px-4 shadow-lg/10 drop-shadow-none transition-all hover:ml-2 hover:text-white`}
+        >
+          <p className="text-center text-xs font-light whitespace-nowrap">
+            Other Data
+          </p>
+        </div>
+        {isOtherDataDisplayed &&
+          stationOtherData.map((data, index) => {
+            return (
+              <DataCell
+                key={index + 6}
+                data={data}
+                index={index + 6}
+                dataContext={stationOtherData}
+                details={true}
+              />
+            );
+          })}
       </div>
     );
   };
@@ -704,7 +745,7 @@ export default function Home() {
     const tphInfo = {
       Sensor: "TPH Sensor BME280",
       "Operating Voltage": "1.71 - 3.6 V",
-      "Operating Voltage": "-40 - 85°C",
+      "Operating Temperature": "-40 - 85°C",
       "Last Maintenance Check": "2025-01-01",
     };
 
@@ -728,6 +769,21 @@ export default function Home() {
       "Last Maintenance Check": "2025-01-01",
     };
 
+    const voltageInfo = {
+      Sensor: "MLE00960 Voltage Detection Sensor Module 25V",
+      "Input Voltage range": "DC0 to 25 V",
+      "Voltage detection range:": "DC 0.02445 V to 25 V",
+      "Last Maintenance Check": "2025-01-01",
+    };
+
+    const dhtInfo = {
+      Sensor: "DHT22",
+      "Operating Voltage": "3 to 5V power",
+      "Humidity Readings": "Good for 0-100% with 2-5% accuracy",
+      "Temperature Readings": "Good for -40 to 80°C with ±0.5°C accuracy",
+      "Last Maintenance Check": "2025-01-01",
+    };
+
     let info;
     switch (graphParameterInfo.data) {
       case "Temperature":
@@ -747,6 +803,15 @@ export default function Home() {
         break;
       case "Wind Direction":
         info = vaneInfo;
+        break;
+      case "Battery Voltage":
+        info = voltageInfo;
+        break;
+      case "Internal Temperature":
+        info = dhtInfo;
+        break;
+      case "Internal Humidity":
+        info = dhtInfo;
         break;
     }
 

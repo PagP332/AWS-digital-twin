@@ -466,7 +466,7 @@ export default function Canvas3D({
     }, [scene, registerBaseColor]);
 
     useEffect(() => {
-      const isSelected = selectedIndex === index;
+      const isSelected = selectedIndex === index || selectedIndex === index+1;
 
       scene.traverse((child) => {
         if (child.isMesh && child.material) {

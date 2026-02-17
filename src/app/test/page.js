@@ -3,6 +3,7 @@ import {
   createAlert,
   diagnoseData,
   getAlertsList,
+  getOtherData,
   predictData,
   pushTest,
   toggleAlert,
@@ -18,29 +19,9 @@ import InputField from "@/components/InputField";
 import FloatingWindow from "@/components/FloatingWindow";
 
 export default function Test() {
-  const alertsList = [
-    {
-      id: 1,
-      read: false,
-      type: "anomaly",
-      resolved: false,
-      sensor: "",
-      station_id: "001",
-      timestamp: "2024-06-01 12:00:00",
-      data: {
-        temperature: 85,
-        humidity: 70,
-        pressure: 1015,
-        windSpeed: 0,
-        windDirection: 277,
-        precipitation: 0,
-      },
-    },
-  ];
-
   return (
     <div className="font-sfpro flex h-svh w-screen items-center justify-center">
-      <Button text="test" onClick={() => diagnoseData(alertsList[0].data)} />
+      <Button text="test" onClick={async () => await getOtherData("001")} />
     </div>
   );
 }

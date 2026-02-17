@@ -115,7 +115,7 @@ const sfpro = localFont({
 });
 
 export const metadata = {
-  title: "The AWS App",
+  title: "Project AWSome",
   description: "Created by Team 1",
 };
 

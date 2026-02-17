@@ -271,10 +271,13 @@ export async function getLatestStationData(stationID) {
 }
 
 export async function getParameterData(stationID, parameter) {
-  if (!parameters.includes(parameter)) {
-    console.error("Invalid parameter");
-    return null;
-  }
+  // if (
+  //   !parameters.includes(parameter) ||
+  //   !["dht-hum", "dht-temp", "voltage"].includes(parameter)
+  // ) {
+  //   console.error("Invalid parameter");
+  //   return null;
+  // }
 
   console.log(`Fetching ${parameter} data of station id ${stationID}`);
   if (stationID === "001") {
@@ -297,6 +300,63 @@ export async function getParameterData(stationID, parameter) {
     console.log(`Fetched ${data.length} values`);
     return data;
   }
+}
+
+export async function getOtherData(stationID) {
+  if (stationID !== "001") {
+    return null;
+  }
+
+  console.log(`Fetching other data of station id ${stationID}`);
+
+  const parameters = ["dht-hum", "dht-temp", "voltage"];
+  const results = await Promise.all(
+    parameters.map(async (parameter) => {
+      const stationRef = collection(db, `stations/${stationID}/${parameter}`);
+      const q = query(stationRef, orderBy("timestamp", "desc"), limit(1));
+      const docResponse = await getDocs(q);
+
+      const doc = docResponse.docs[0];
+      if (!doc) return { parameter };
+
+      return {
+        parameter,
+        id: doc.id,
+        dateTime: doc.data().timestamp,
+        value: doc.data().value,
+      };
+    }),
+  );
+
+  // console.log(results);
+  const formatted = [
+    {
+      data: "Battery Voltage",
+      id: results.find((r) => r.parameter === "voltage")?.id ?? null,
+      value: results.find((r) => r.parameter === "voltage")?.value ?? "--",
+      datetime:
+        results.find((r) => r.parameter === "voltage")?.dateTime ?? null,
+      unit: " V",
+    },
+    {
+      data: "Internal Temperature",
+      id: results.find((r) => r.parameter === "dht-temp")?.id ?? null,
+      value: results.find((r) => r.parameter === "dht-temp")?.value ?? "--",
+      datetime:
+        results.find((r) => r.parameter === "dht-temp")?.dateTime ?? null,
+      unit: "°",
+    },
+    {
+      data: "Internal Humidity",
+      id: results.find((r) => r.parameter === "dht-hum")?.id ?? null,
+      value: results.find((r) => r.parameter === "dht-hum")?.value ?? "--",
+      datetime:
+        results.find((r) => r.parameter === "dht-hum")?.dateTime ?? null,
+      unit: "%",
+    },
+  ];
+  ``;
+  return formatted;
 }
 
 export async function modelStatusCheck() {
