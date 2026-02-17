@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import React from "react";
 import FloatingWindow from "./FloatingWindow";
 
-export default function Overlay({ children, handleExitClick }) {
+export default function Overlay({ children, handleExitClick, windowClass }) {
   return (
     <div
       className="fixed top-0 left-0 z-100 h-full w-full bg-black/50"
@@ -15,7 +15,7 @@ export default function Overlay({ children, handleExitClick }) {
         <X size={32} color={"white"} />
       </button>
       <div
-        className="z-50 flex h-full items-center justify-center"
+        className={`z-50 flex h-full items-center justify-center ${windowClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         <FloatingWindow>{children}</FloatingWindow>

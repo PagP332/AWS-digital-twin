@@ -8,10 +8,12 @@ import {
   serverTimestamp,
   addDoc,
   orderBy,
+  where,
   limit,
 } from "firebase/firestore";
 
 import { db } from "./route";
+import { generateUUID } from "@/utils/predict";
 
 export const parameters = [
   "precipitation",
@@ -115,8 +117,19 @@ export async function test(stationId, parameter) {
   console.log(docRef.id);
   console.log(data);
 }
+export async function pushTest() {
+  const colRef = collection(db, `stations/001/humidity`);
+
+  const docRef = await addDoc(colRef, {
+    value: 123,
+    timestamp: serverTimestamp(),
+  });
+
+  console.log(docRef);
+}
 
 export async function getStationsList() {
+  console.log("Fetching stations list...");
   const stationRef = collection(db, "stations");
   const docResponse = await getDocs(stationRef);
 
@@ -126,7 +139,7 @@ export async function getStationsList() {
   }));
 
   // console.log(output);
-
+  console.log(`Fetched ${output.length} stations`);
   return output;
 }
 
@@ -250,6 +263,9 @@ export async function getLatestStationData(stationID) {
     },
   ];
 
+  console.log(
+    `Fetched ${formatted.length} parameters for station ${stationID}`,
+  );
   // console.log(formatted);
   return formatted;
 }
@@ -267,6 +283,7 @@ export async function getParameterData(stationID, parameter) {
     const docResponse = await getDocs(q);
     const data = docResponse.docs.map((doc) => doc.data()).reverse();
 
+    console.log(`Fetched ${data.length} values`);
     return data;
   } else {
     const stationRef = doc(db, `stations/${stationID}/${parameter}/latestData`);
@@ -277,6 +294,218 @@ export async function getParameterData(stationID, parameter) {
       : [];
 
     // console.log(data);
+    console.log(`Fetched ${data.length} values`);
     return data;
+  }
+}
+
+export async function modelStatusCheck() {
+  try {
+    const res = await fetch("http://localhost:8000/health", {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Model status request failed:", res.status, text);
+      return false;
+    } else {
+      console.log("Model Status OK");
+      return true;
+    }
+  } catch (err) {
+    console.error("Request error:", err);
+    return false;
+  }
+}
+
+export async function predictData(payload) {
+  // Sample request:
+  // {
+  //     "temperature": 29,
+  //     "humidity": 56,
+  //     "pressure": 1005.4,
+  //     "windSpeed": 0,
+  //     "windDirection": 278,
+  //     "precipitation": 0
+  // }
+
+  // Check payload validity
+  if (
+    payload.temperature === undefined ||
+    payload.humidity === undefined ||
+    payload.pressure === undefined ||
+    payload.windSpeed === undefined ||
+    payload.windDirection === undefined ||
+    payload.precipitation === undefined
+  ) {
+    console.error("Invalid payload for prediction");
+    return null;
+  }
+
+  try {
+    const res = await fetch("http://localhost:8000/predict", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Prediction request failed:", res.status, text);
+      return null;
+    }
+
+    const body = await res.json();
+    console.log("Prediction result:", body);
+
+    return body;
+  } catch (err) {
+    console.error("Request error:", err);
+    return null;
+  }
+}
+
+export async function getAlertsList(stationID) {
+  console.log("Fetching alerts list...");
+  const alertsRef = collection(db, "alerts");
+  const q = query(
+    alertsRef,
+    where("station_id", "==", stationID),
+    where("resolved", "==", false),
+    where("type", "==", "anomaly"),
+    orderBy("timestamp", "desc"),
+  );
+  const res = await getDocs(q);
+  const alerts = res.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+    };
+  });
+  console.log(`Fetched ${alerts.length} alerts`);
+  return alerts;
+}
+
+export async function readAlert(alertID, read) {
+  if (read) return;
+  else {
+    console.log(`Marking alert id ${alertID} as read...`);
+    const alertRef = doc(db, `alerts/${alertID}`);
+    await setDoc(alertRef, { read: true }, { merge: true });
+    console.log(`Alert id ${alertID} marked as read.`);
+  }
+}
+
+export async function toggleResolveAlert(alertID, resolved) {
+  console.log(`Resolving alert id ${alertID}...`);
+  const alertRef = doc(db, `alerts/${alertID}`);
+  await setDoc(alertRef, { resolved: !resolved }, { merge: true });
+  console.log(`Alert id ${alertID} toggled.`);
+}
+
+export async function setAlertSensor(alertID, sensor) {
+  console.log(`Setting sensor for alert id ${alertID}...`);
+  const alertRef = doc(db, `alerts/${alertID}`);
+  await setDoc(alertRef, { sensor: sensor }, { merge: true });
+  console.log(`Alert id ${alertID} sensor set to ${sensor}.`);
+}
+
+export async function createAlert(stationID, type, timestamp, data) {
+  // payload example:
+  // {
+  //   station_id: '001',
+  //   type: 'anomaly',
+  //   timestamp: "2025-10-25 13:49:01"
+  //   data: {
+  //     humidity: 85,
+  //     temperature: 30,
+  //     pressure: 1003.5,
+  //     windSpeed: 0,
+  //     windDirection: 270,
+  //     precipitation: 0
+  //   }
+  // }
+  const uuid = await generateUUID(timestamp, stationID);
+
+  const payload = {
+    resolved: false,
+    read: false,
+    sensor: "",
+    station_id: stationID,
+    timestamp: String(timestamp),
+    type,
+    data,
+  };
+
+  const alertsRef = doc(db, "alerts", uuid);
+  try {
+    console.log("Creating alert on ", stationID);
+    const docSnap = await getDoc(alertsRef);
+    if (docSnap.exists()) {
+      console.log("Alert already exists with ID:", uuid);
+      return;
+    }
+    await setDoc(alertsRef, payload);
+  } catch (e) {
+    console.error("Failed to create alert: ", e);
+    return;
+  }
+  console.log("Alert created with ID:", uuid);
+}
+
+export async function diagnoseData(payload) {
+  // Sample request:
+  // {
+  //     "temperature": 29,
+  //     "humidity": 56,
+  //     "pressure": 1005.4,
+  //     "windSpeed": 0,
+  //     "windDirection": 278,
+  //     "precipitation": 0
+  // }
+
+  // Check payload validity
+  if (
+    payload.temperature === undefined ||
+    payload.humidity === undefined ||
+    payload.pressure === undefined ||
+    payload.windSpeed === undefined ||
+    payload.windDirection === undefined ||
+    payload.precipitation === undefined
+  ) {
+    console.error("Invalid payload for prediction");
+    return null;
+  }
+  try {
+    const res = await fetch("http://localhost:8000/diagnose", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Prediction request failed:", res.status, text);
+      return null;
+    }
+
+    const body = await res.json();
+    console.log("Diagnosis result:", body);
+
+    return body;
+  } catch (err) {
+    console.error("Request error:", err);
+    return null;
   }
 }

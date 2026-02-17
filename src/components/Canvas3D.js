@@ -5,14 +5,20 @@ import {
   useGLTF,
   useAnimations,
   useCursor,
+  AccumulativeShadows,
+  RandomizedLight,
+  Environment as EnvironmentImpl,
 } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 
 const rootPosition = [0, -1, 0];
 const hoverColor = new THREE.Color("#4543b1");
+const markedColor = new THREE.Color("#DA1E28");
+
+// const sensors = ["temperature", "windSpeed"];
 
 const useCameraStore = create((set) => ({
   position: [23, 41, 10],
@@ -41,9 +47,49 @@ const useSensorStore = create((set, get) => ({
   setSelectedIndex: (index) => set({ selectedIndex: index }),
 }));
 
+const IntroCamera = ({ stationID, target, duration = 1, factor = 10 }) => {
+  const { camera } = useThree();
+  const startPos = useRef(new THREE.Vector3());
+  const targetPos = useRef(new THREE.Vector3());
+  const startTime = useRef(0);
+  const playingRef = useRef(false);
+  const lastStationRef = useRef(null);
+
+  useEffect(() => {
+    // Avoid double init in React 18 StrictMode while already animating
+    if (playingRef.current && lastStationRef.current === stationID) return;
+
+    // Initialize animation for this station
+    targetPos.current.set(target[0], target[1], target[2]);
+    startPos.current.set(
+      target[0] * factor,
+      target[1] * factor,
+      target[2] * factor,
+    );
+    camera.position.copy(startPos.current);
+    startTime.current = performance.now();
+    playingRef.current = true;
+    lastStationRef.current = stationID;
+  }, [stationID, target, camera, factor]);
+
+  useFrame(() => {
+    if (!playingRef.current) return;
+    const t = (performance.now() - startTime.current) / (duration * 1000);
+    const clamped = Math.min(t, 1);
+    const ease = 1 - Math.pow(1 - clamped, 5); // easeOut
+    camera.position.lerpVectors(startPos.current, targetPos.current, ease);
+    camera.lookAt(0, 26, 0);
+    if (clamped >= 1) playingRef.current = false;
+  });
+
+  return null;
+};
+
 export default function Canvas3D({
+  selectedStationID,
   parameterSelectedIndexProp,
   handleCanvasParameterSelect,
+  sensors,
 }) {
   const { position, setPosition } = useCameraStore();
   const setSelectedIndex = useSensorStore((s) => s.setSelectedIndex);
@@ -58,6 +104,15 @@ export default function Canvas3D({
 
   // console.log(position);
 
+  const enableMeshShadows = (root) => {
+    root.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+  };
+
   const CameraTracker = () => {
     const { camera } = useThree();
     useFrame(() =>
@@ -66,13 +121,38 @@ export default function Canvas3D({
     return null;
   };
 
+  const Environment = memo(function Environment({ direction = [5, 5, 5] }) {
+    return (
+      <>
+        <directionalLight
+          castShadow
+          position={[10, 20, 15]}
+          shadow-camera-right={8}
+          shadow-camera-top={8}
+          shadow-camera-left={-8}
+          shadow-camera-bottom={-8}
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+          intensity={2}
+          shadow-bias={-0.0001}
+        />
+        {/* </AccumulativeShadows> */}
+        <EnvironmentImpl preset="city" />
+      </>
+    );
+  });
+  Environment.displayName = "Environment";
   const BaseFrame = () => {
     const baseFrame = useLoader(GLTFLoader, "/models/BaseFrame.glb");
+    useEffect(() => {
+      enableMeshShadows(baseFrame.scene);
+    }, [baseFrame.scene]);
     return (
       <primitive
         object={baseFrame.scene}
         position={rootPosition}
-        children-0-castShadow
+        receiveShadow
+        castShadow
       />
     );
   };
@@ -90,15 +170,13 @@ export default function Canvas3D({
 
     useEffect(() => {
       if (actions[names[0]]) actions[names[0]].play();
-    }, [actions, names]);
-
-    useEffect(() => {
+      enableMeshShadows(scene);
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           registerBaseColor(child);
         }
       });
-    }, [scene, registerBaseColor]);
+    }, [actions, names, scene, registerBaseColor]);
 
     useEffect(() => {
       const isSelected = selectedIndex === index;
@@ -106,7 +184,9 @@ export default function Canvas3D({
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           const baseColor = getBaseColor(child);
-          if (isSelected || hovered) {
+          if (sensors.includes("windSpeed")) {
+            child.material.color.copy(markedColor);
+          } else if (isSelected || hovered) {
             child.material.color.copy(hoverColor);
           } else {
             child.material.color.copy(baseColor);
@@ -120,7 +200,8 @@ export default function Canvas3D({
         object={scene}
         ref={group}
         position={rootPosition}
-        children-0-castShadow
+        receiveShadow
+        castShadow
         onPointerOver={(e) => {
           e.stopPropagation();
           setHovered(true);
@@ -149,15 +230,13 @@ export default function Canvas3D({
 
     useEffect(() => {
       if (actions[names[0]]) actions[names[0]].play();
-    }, [actions, names]);
-
-    useEffect(() => {
+      enableMeshShadows(scene);
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           registerBaseColor(child);
         }
       });
-    }, [scene, registerBaseColor]);
+    }, [actions, names, scene, registerBaseColor]);
 
     useEffect(() => {
       const isSelected = selectedIndex === index;
@@ -165,7 +244,9 @@ export default function Canvas3D({
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           const baseColor = getBaseColor(child);
-          if (isSelected || hovered) {
+          if (sensors.includes("windDirection")) {
+            child.material.color.copy(markedColor);
+          } else if (isSelected || hovered) {
             child.material.color.copy(hoverColor);
           } else {
             child.material.color.copy(baseColor);
@@ -179,7 +260,8 @@ export default function Canvas3D({
         object={scene}
         ref={group}
         position={rootPosition}
-        children-0-castShadow
+        receiveShadow
+        castShadow
         onPointerOver={(e) => {
           e.stopPropagation();
           setHovered(true);
@@ -205,6 +287,7 @@ export default function Canvas3D({
     useCursor(hovered);
 
     useEffect(() => {
+      enableMeshShadows(scene);
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           registerBaseColor(child);
@@ -218,7 +301,9 @@ export default function Canvas3D({
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           const baseColor = getBaseColor(child);
-          if (isSelected || hovered) {
+          if (sensors.includes("precipitation")) {
+            child.material.color.copy(markedColor);
+          } else if (isSelected || hovered) {
             child.material.color.copy(hoverColor);
           } else {
             child.material.color.copy(baseColor);
@@ -231,7 +316,8 @@ export default function Canvas3D({
       <primitive
         object={scene}
         position={rootPosition}
-        children-0-castShadow
+        receiveShadow
+        castShadow
         onPointerOver={(e) => {
           e.stopPropagation();
           setHovered(true);
@@ -257,6 +343,67 @@ export default function Canvas3D({
     useCursor(hovered);
 
     useEffect(() => {
+      enableMeshShadows(scene);
+      scene.traverse((child) => {
+        if (child.isMesh && child.material) {
+          registerBaseColor(child);
+        }
+      });
+    }, [scene, registerBaseColor]);
+
+    useEffect(() => {
+      const isSelected = selectedIndex === index;
+
+      scene.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const baseColor = getBaseColor(child);
+          if (
+            sensors.includes("temperature") ||
+            sensors.includes("humidity") ||
+            sensors.includes("pressure")
+          ) {
+            child.material.color.copy(markedColor);
+          } else if (isSelected || hovered) {
+            child.material.color.copy(hoverColor);
+          } else {
+            child.material.color.copy(baseColor);
+          }
+        }
+      });
+    }, [hovered, selectedIndex, scene, getBaseColor, index]);
+
+    return (
+      <primitive
+        object={scene}
+        position={rootPosition}
+        receiveShadow
+        castShadow
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleCanvasParameterSelect(index);
+        }}
+      />
+    );
+  };
+  const SolarPanel = ({ index }) => {
+    const { scene } = useLoader(GLTFLoader, "/models/SolarPanel.glb");
+    const [hovered, setHovered] = useState(false);
+
+    const registerBaseColor = useSensorStore((s) => s.registerBaseColor);
+    const getBaseColor = useSensorStore((s) => s.getBaseColor);
+    const selectedIndex = useSensorStore((s) => s.selectedIndex);
+
+    useCursor(hovered);
+
+    useEffect(() => {
+      enableMeshShadows(scene);
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
           registerBaseColor(child);
@@ -283,7 +430,62 @@ export default function Canvas3D({
       <primitive
         object={scene}
         position={rootPosition}
-        children-0-castShadow
+        receiveShadow
+        castShadow
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleCanvasParameterSelect(index);
+        }}
+      />
+    );
+  };
+  const Enclosure = ({ index }) => {
+    const { scene } = useLoader(GLTFLoader, "/models/Enclosure.glb");
+    const [hovered, setHovered] = useState(false);
+
+    const registerBaseColor = useSensorStore((s) => s.registerBaseColor);
+    const getBaseColor = useSensorStore((s) => s.getBaseColor);
+    const selectedIndex = useSensorStore((s) => s.selectedIndex);
+
+    useCursor(hovered);
+
+    useEffect(() => {
+      enableMeshShadows(scene);
+      scene.traverse((child) => {
+        if (child.isMesh && child.material) {
+          registerBaseColor(child);
+        }
+      });
+    }, [scene, registerBaseColor]);
+
+    useEffect(() => {
+      const isSelected = selectedIndex === index;
+
+      scene.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const baseColor = getBaseColor(child);
+          if (isSelected || hovered) {
+            child.material.color.copy(hoverColor);
+          } else {
+            child.material.color.copy(baseColor);
+          }
+        }
+      });
+    }, [hovered, selectedIndex, scene, getBaseColor, index]);
+
+    return (
+      <primitive
+        object={scene}
+        position={rootPosition}
+        receiveShadow
+        castShadow
         onPointerOver={(e) => {
           e.stopPropagation();
           setHovered(true);
@@ -299,6 +501,7 @@ export default function Canvas3D({
     );
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const canvasElement = useMemo(
     () => (
       <Canvas
@@ -307,23 +510,17 @@ export default function Canvas3D({
           position, // <-- sets where the camera starts
         }}
       >
-        <directionalLight
-          position={[3.3, 1.0, 4.4]}
-          castShadow
-          intensity={Math.PI * 2}
-        />
-        <directionalLight
-          position={[-3.3, 1.0, -4.4]}
-          castShadow
-          intensity={Math.PI / 2}
-        />
+        <Environment />
 
         <BaseFrame />
         <Anemometer index={4} />
         <WindVane index={5} />
         <RainSensor index={0} />
         <TPH_Sensor index={1} />
+        <SolarPanel index={6} />
+        <Enclosure index={7} />
 
+        {/* <IntroCamera stationID={selectedStationID} target={position} /> */}
         <CameraTracker />
         <OrbitControls enablePan={false} maxDistance={50} target={[0, 26, 0]} />
       </Canvas>

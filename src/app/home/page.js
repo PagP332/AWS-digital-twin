@@ -5,7 +5,7 @@ import Logos, { PAGASA } from "@/components/Logos";
 // import Map from "@/components/Map";
 import Overlay from "@/components/Overlay";
 import StatusIndicator from "@/components/StatusIndicator";
-import { CloudSun, Settings, X } from "lucide-react";
+import { CloudSun, Settings, X, Dot, TriangleAlert } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import React, {
@@ -18,15 +18,29 @@ import React, {
 import Canvas3D from "@/components/Canvas3D";
 import Button from "@/components/Button";
 import {
+  diagnoseData,
+  getAlertsList,
   getLatestStationData,
   getParameterData,
+  modelStatusCheck,
   parameters,
+  readAlert,
+  setAlertSensor,
+  toggleResolveAlert,
 } from "@/api/utils.mjs";
 import { formatDateTime } from "@/components/formatDate";
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import { db } from "@/api/route";
 import Graph from "@/components/Graph";
 import { SyncLoader } from "react-spinners";
+import { handlePredictData } from "@/utils/predict";
 
 export default function Home() {
   // STATES
@@ -39,6 +53,11 @@ export default function Home() {
   const [stationData, setStationData] = useState([]);
   const [lastObserved, setLastObserved] = useState("Not Available");
 
+  const [alertsList, setAlertsList] = useState([]);
+  const [unreadAlerts, setUnreadAlerts] = useState(false);
+  // const [alertsDetailsData, setAlertsDetailsData] = useState(null);
+  const [selectedAlertId, setSelectedAlertId] = useState(null);
+
   const [graphData, setGraphData] = useState([]);
   const [graphDataRef, setGraphDataRef] = useState([]);
   const [graphParameterInfo, setGraphParameterInfo] = useState(null);
@@ -46,9 +65,16 @@ export default function Home() {
 
   const [parameterSelectedIndex, setParameterSelectedIndex] = useState(null);
 
+  const [modelStatus, setModelStatus] = useState(false);
+
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isMainContentDisplayed, setIsMainContentDisplayer] = useState(false);
   const [isGraphOverlayDisplayed, setIsGraphOverlayDisplayed] = useState(false);
+  const [isNotificationOverlayDisplayed, setIsNotificationOverlayDisplayed] =
+    useState(false);
+  const [isNewAlertDisplayed, setIsNewAlertDisplayed] = useState(false);
+  const [isAlertsDetailsDisplayed, setIsAlertsDetailsDisplayed] =
+    useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -115,116 +141,58 @@ export default function Home() {
     setGraphParameterInfo(data);
     setIsGraphOverlayDisplayed(true);
   };
-
-  // EFFECTS
-  useEffect(() => {
-    if (selectedStationID) {
-      setIsLoading(true);
-      const fetchStationData = async () => {
-        try {
-          const response = await getLatestStationData(selectedStationID);
-          setStationData(response);
-          setLastObserved(getLatestDatetime(response));
-        } catch (err) {
-          console.error("Failed to fetch station data: ", err);
-        }
-      };
-      fetchStationData();
-      setIsLoading(false);
+  const handleDiagnoseAlert = async (alertID, data) => {
+    console.log(`Diagnosing alert id ${alertID}...`);
+    try {
+      const res = await diagnoseData(data);
+      // console.log("Diagnose result: ", res.data.anomalies);
+      await setAlertSensor(alertID, res.data.anomalies);
+    } catch (e) {
+      console.error("Failed to diagnose alert: ", e);
+      return;
     }
-  }, [selectedStationID]);
-
-  useEffect(() => {
-    if (!selectedStationID) return;
-
-    let timeoutId;
-    const handleChange = () => {
-      setIsUpdating(true);
-      clearTimeout(timeoutId); // clear any previous timer
-      timeoutId = setTimeout(() => {
-        setIsLoading(true);
-        const fetchStationData = async () => {
-          try {
-            const response = await getLatestStationData(selectedStationID);
-            setStationData(response);
-            setLastObserved(getLatestDatetime(response));
-          } catch (err) {
-            console.error("Failed to fetch station data: ", err);
-          }
-        };
-        fetchStationData();
-        setIsLoading(false);
-        setIsUpdating(false);
-      }, 5000); // wait 10 seconds before calling refetch
-    };
-
-    const listeners = parameters.map((parameter) =>
-      onSnapshot(
-        collection(db, `stations/${selectedStationID}/${parameter}`),
-        (snapshot) => {
-          snapshot.docChanges().forEach((change) => {
-            if (
-              change.type === "modified" ||
-              change.type === "added" ||
-              change.type === "removed"
-            ) {
-              console.log("Change detected, refetching data");
-              handleChange();
-            }
-          });
-        },
-      ),
-    );
-
-    return () => {
-      listeners.forEach((unsub) => unsub());
-      clearTimeout(timeoutId);
-    };
-  }, [selectedStationID]);
-
-  useEffect(() => {
-    const filteredData = dataCleanup(graphDataRef, filterGraph);
-    setGraphData(filteredData);
-    // console.log(graphData);
-  }, [filterGraph, graphDataRef]);
+  };
 
   // UTILITY
-  const getLatestDatetime = useCallback((response) => {
-    if (selectedStationID === "001") {
-      const validTimestamps = response
-        .map((item) => item.datetime)
-        .filter((t) => t)
-        .map((t) => {
-          if (typeof t.toDate === "function") {
-            // Firestore Timestamp object
-            return t.toDate().getTime();
-          } else if (typeof t === "string") {
-            // String format: "YYYY-MM-DD HH:mm:ss"
-            const normalized = t.replace(" ", "T"); // convert to ISO-like format
-            return new Date(normalized).getTime();
-          }
-          return null;
-        })
-        .filter((time) => !isNaN(time));
+  const getLatestDatetime = useCallback(
+    (response) => {
+      if (selectedStationID === "001") {
+        const validTimestamps = response
+          .map((item) => item.datetime)
+          .filter((t) => t)
+          .map((t) => {
+            if (typeof t.toDate === "function") {
+              // Firestore Timestamp object
+              return t.toDate().getTime();
+            } else if (typeof t === "string") {
+              // String format: "YYYY-MM-DD HH:mm:ss"
+              const normalized = t.replace(" ", "T"); // convert to ISO-like format
+              return new Date(normalized).getTime();
+            }
+            return null;
+          })
+          .filter((time) => !isNaN(time));
 
-      const latestTimestamp = validTimestamps.length
-        ? new Date(Math.max(...validTimestamps))
-        : null;
+        const latestTimestamp = validTimestamps.length
+          ? new Date(Math.max(...validTimestamps))
+          : null;
 
-      console.log(`latest timestamp ${latestTimestamp}`);
+        console.log(`latest timestamp ${latestTimestamp}`);
 
-      const latestDateTime = latestTimestamp
-        ? new Intl.DateTimeFormat("en-US", {
-            dateStyle: "medium",
-            timeStyle: "medium",
-          }).format(latestTimestamp)
-        : "No Data Available";
+        const latestDateTime = latestTimestamp
+          ? new Intl.DateTimeFormat("en-US", {
+              dateStyle: "medium",
+              timeStyle: "medium",
+            }).format(latestTimestamp)
+          : "No Data Available";
 
-      return latestDateTime;
-    } else {
-      return formatDateTime(response[0].datetime);
-    }
-  });
+        return latestDateTime;
+      } else {
+        return formatDateTime(response[0].datetime);
+      }
+    },
+    [selectedStationID],
+  );
   const dataCleanup = (data, filterGraph = 5) => {
     if (!data || data.length === 0) return [];
 
@@ -262,6 +230,201 @@ export default function Home() {
     // Map to unified format and reverse for ascending order
     return filtered.sort((a, b) => new Date(a[timeKey]) - new Date(b[timeKey]));
   };
+  const uniqueSensors = useMemo(() => {
+    const set = new Set();
+    (alertsList || []).forEach((a) => {
+      const sensors = Array.isArray(a.sensor) ? a.sensor : [];
+      sensors.forEach((s) => {
+        if (typeof s === "string" && s.length) set.add(s);
+      });
+    });
+    return Array.from(set); // e.g., ["temperature", "humidity", ...]
+  }, [alertsList]);
+
+  // EFFECTS
+  useEffect(() => {
+    if (selectedStationID) {
+      setIsLoading(true);
+      const fetchStationData = async () => {
+        try {
+          const response = await getLatestStationData(selectedStationID);
+          const latestTime = await getLatestDatetime(response);
+
+          setStationData(response);
+          setLastObserved(latestTime);
+          if (selectedStationID === "001")
+            handlePredictData(response, selectedStationID);
+        } catch (err) {
+          console.error("Failed to fetch station data: ", err);
+        }
+      };
+      fetchStationData();
+      setIsLoading(false);
+    }
+  }, [selectedStationID, getLatestDatetime]);
+
+  useEffect(() => {
+    if (!selectedStationID) return;
+
+    let timeoutId;
+    const handleChange = () => {
+      setIsUpdating(true);
+      clearTimeout(timeoutId); // clear any previous timer
+      timeoutId = setTimeout(async () => {
+        setIsLoading(true);
+        try {
+          console.log("Change detected, Refetching data...");
+          const response = await getLatestStationData(selectedStationID);
+          const latestTime = await getLatestDatetime(response);
+
+          setStationData(response);
+          setLastObserved(latestTime);
+          if (selectedStationID === "001")
+            handlePredictData(response, selectedStationID);
+        } catch (err) {
+          console.error("Failed to fetch station data: ", err);
+        } finally {
+          setIsLoading(false);
+          setIsUpdating(false);
+        }
+      }, 5000); // wait 10 seconds before calling refetch
+    };
+
+    const initialFlags = new Map();
+
+    const listeners = parameters.map(
+      (parameter) => {
+        initialFlags.set(parameter, true);
+        const colRef = collection(
+          db,
+          `stations/${selectedStationID}/${parameter}`,
+        );
+
+        const q = query(colRef, orderBy("timestamp", "desc"), limit(1));
+
+        return onSnapshot(q, (snapshot) => {
+          if (initialFlags.get(parameter)) {
+            initialFlags.set(parameter, false);
+            return;
+          }
+
+          const changed = snapshot
+            .docChanges()
+            .some(
+              (change) =>
+                change.type === "added" ||
+                change.type === "modified" ||
+                change.type === "removed",
+            );
+
+          if (changed) {
+            handleChange();
+          }
+        });
+      },
+      // onSnapshot(
+      //   collection(db, `stations/${selectedStationID}/${parameter}`),
+      //   (snapshot) => {
+      //     snapshot.docChanges().forEach((change) => {
+      //       if (
+      //         change.type === "modified" ||
+      //         change.type === "added" ||
+      //         change.type === "removed"
+      //       ) {
+      //         console.log("Change detected, refetching data");
+      //         handleChange();
+      //       }
+      //     });
+      //   },
+      // ),
+    );
+
+    return () => {
+      listeners.forEach((unsub) => unsub());
+      clearTimeout(timeoutId);
+    };
+  }, [selectedStationID, getLatestDatetime]);
+
+  useEffect(() => {
+    if (!selectedStationID) return;
+
+    (async () => {
+      try {
+        const alertRes = await getAlertsList(selectedStationID);
+        setAlertsList(alertRes);
+        // console.log(alertRes);
+      } catch (err) {
+        console.error("Failed to fetch alerts: ", err);
+      }
+    })();
+  }, [selectedStationID]);
+
+  useEffect(() => {
+    const filteredData = dataCleanup(graphDataRef, filterGraph);
+    setGraphData(filteredData);
+    // console.log(graphData);
+  }, [filterGraph, graphDataRef]);
+
+  useEffect(() => {
+    let c = false;
+
+    const check = async () => {
+      try {
+        const res = await modelStatusCheck();
+        if (!c) setModelStatus(res);
+      } catch (e) {
+        console.error("Failed to fetch model status: ", e);
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 10000);
+
+    return () => {
+      c = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (unreadAlerts) {
+      setIsNewAlertDisplayed(true);
+    }
+  }, [unreadAlerts]);
+
+  useEffect(() => {
+    setUnreadAlerts(alertsList.some((a) => a.read === false));
+  }, [alertsList]);
+
+  useEffect(() => {
+    const alertsRef = collection(db, "alerts");
+    const unsub = onSnapshot(alertsRef, (snap) => {
+      const updatedMessages = snap
+        .docChanges()
+        .filter((c) => c.type !== "removed")
+        .map((c) => ({ id: c.doc.id, ...c.doc.data() }));
+
+      if (updatedMessages.length === 0) return;
+      console.log("Alerts updated:", updatedMessages);
+      setAlertsList((prev) => {
+        const byId = new Map((prev || []).map((a) => [a.id, a]));
+        const newItems = [];
+
+        for (const msg of updatedMessages) {
+          if (byId.has(msg.id)) {
+            byId.set(msg.id, msg); // replace existing
+          } else {
+            newItems.push(msg); // queue for append
+            byId.set(msg.id, msg);
+          }
+        }
+
+        return [...(prev || []).map((a) => byId.get(a.id)), ...newItems];
+      });
+    });
+
+    return () => unsub();
+  }, []);
 
   // COMPONENTS
   const SidebarTabs = ({ children, className, ...props }) => {
@@ -309,8 +472,20 @@ export default function Home() {
       </FloatingWindow>
     );
   };
-  const DataCell = ({ data, index }) => {
-    // console.log(data);
+  const DataCell = ({ data, index, dataContext }) => {
+    // console.log(dataContext);
+    let value, unit;
+    if (data.data === "Wind Direction") {
+      const windSpeed =
+        dataContext.find((d) => d.data === "Wind Speed")?.value || 0;
+      if (windSpeed === 0) {
+        value = "--";
+        unit = "";
+      }
+    } else {
+      value = data.value;
+      unit = data.unit;
+    }
     if (parameterSelectedIndex === index) {
       // console.log("parameter selected");
       return (
@@ -348,8 +523,8 @@ export default function Home() {
             {data.data}
           </p>
           <p className="text-s text-left font-semibold whitespace-nowrap">
-            {data.value}
-            {data.unit}
+            {value}
+            {unit}
           </p>
         </div>
       );
@@ -376,6 +551,15 @@ export default function Home() {
       </div>
     );
   };
+  const AlertButton = () => {
+    return (
+      <Button
+        text={"Alerts"}
+        onClick={() => setIsNotificationOverlayDisplayed(true)}
+        className={`!text-2xl !font-semibold ${unreadAlerts ? "!bg-accent" : "!bg-white !text-black"}`}
+      />
+    );
+  };
 
   // UI
   const Sidebar = () => {
@@ -396,6 +580,14 @@ export default function Home() {
         </div>
 
         <div>
+          <div className="mb-5 flex flex-row gap-1">
+            <p className="text-xs">Model Status: </p>
+            {modelStatus ? (
+              <p className="text-xs text-[#24A148]"> Active</p>
+            ) : (
+              <p className="text-xs text-[#DA1E28]"> Inactive</p>
+            )}
+          </div>
           <SidebarTabs>
             <Settings size={14} />
             <Link href="/" className="ml-1 text-xs font-medium">
@@ -431,7 +623,14 @@ export default function Home() {
     return (
       <div className="inline-grid w-1/8 grid-cols-1 justify-start gap-2">
         {stationData.map((data, index) => {
-          return <DataCell key={index} data={data} index={index} />;
+          return (
+            <DataCell
+              key={index}
+              data={data}
+              index={index}
+              dataContext={stationData}
+            />
+          );
         })}
       </div>
     );
@@ -475,6 +674,8 @@ export default function Home() {
             <Canvas3D
               parameterSelectedIndexProp={parameterSelectedIndex}
               handleCanvasParameterSelect={handleCanvasParameterSelect}
+              stationID={selectedStationID}
+              sensors={uniqueSensors}
             />
           </div>
           {isUpdating && (
@@ -485,6 +686,16 @@ export default function Home() {
               </p>
             </div>
           )}
+          <div className="absolute top-50 right-5 z-80 inline-flex items-center gap-2">
+            <div className="relative">
+              {unreadAlerts && (
+                <span className="absolute -top-8 -left-10 z-1">
+                  <Dot size={80} color="red" />
+                </span>
+              )}
+              <AlertButton />
+            </div>
+          </div>
         </div>
       );
     }
@@ -585,6 +796,178 @@ export default function Home() {
       </Overlay>
     );
   };
+  const NotificationsOverlay = () => {
+    const NotificationTab = ({ alert, index }) => {
+      // console.log(alert);
+      const { id, data, read, type, resolved, sensor, station_id, timestamp } =
+        alert;
+
+      const handleDetailsClick = async () => {
+        await readAlert(id, read);
+        setSelectedAlertId(id);
+        setIsAlertsDetailsDisplayed(true);
+      };
+
+      return (
+        <div className="relative flex flex-col items-start justify-center gap-2 rounded-lg bg-gray-200 p-3 transition-all hover:bg-gray-300">
+          {!read ? (
+            <span className="absolute -top-9 -right-9">
+              <Dot size={80} color="red" />
+            </span>
+          ) : null}
+          <div className="z-1 flex flex-row items-center justify-between">
+            <TriangleAlert size={20} color="#514fbc" />
+            <p className="text-accent mr-10 ml-2 text-xl font-semibold">
+              Abnormal Behavior Detected
+            </p>
+            <Button text="Details" onClick={handleDetailsClick} />
+          </div>
+          <div className="flex flex-row gap-5">
+            <p className="text-sm font-light">{`Station #${station_id}`}</p>
+            <p className="text-sm font-light">{timestamp}</p>
+          </div>
+        </div>
+      );
+    };
+    const AlertTab = () => {
+      const alertDetailsData = alertsList.find((a) => a.id === selectedAlertId);
+      if (!alertDetailsData) return null;
+      const { id, data, resolved, station_id, timestamp, sensor } =
+        alertDetailsData;
+
+      return (
+        <div>
+          <FloatingWindow>
+            <p className="text-xl font-semibold">Alert</p>
+            <div>
+              <div className="z-1 flex flex-row items-center justify-between">
+                <TriangleAlert size={20} color="#514fbc" />
+                <p className="text-accent mr-10 ml-2 text-xl font-semibold">
+                  Abnormal Behavior Detected
+                </p>
+              </div>
+              <p className="font-light">{`Station #${station_id}`}</p>
+              <p className="font-light">{timestamp}</p>
+              <div className="flex items-center justify-between">
+                <p className="font-light opacity-50">
+                  {resolved ? "Resolved" : "Unresolved"}
+                </p>
+                <Button
+                  text="Resolve"
+                  onClick={() => toggleResolveAlert(id, resolved)}
+                />
+              </div>
+              <div className="mt-8 mb-4 flex flex-col gap-2">
+                <div
+                  className={`gap-1 ${sensor.includes("precipitation") ? "font-bold text-[#DA1E28]" : ""}`}
+                >
+                  <p className="font-light">Precipitation</p>
+                  <p className="text-lg font-medium">
+                    {data.precipitation === 999999 ? "--" : data.precipitation}
+                  </p>
+                </div>
+                <div
+                  className={`gap-1 ${sensor.includes("temperature") ? "font-bold text-[#DA1E28]" : ""}`}
+                >
+                  <p className="font-light">Temperature</p>
+                  <p className="text-lg font-medium">
+                    {data.temperature === 999999 ? "--" : data.temperature}
+                  </p>
+                </div>
+                <div
+                  className={`gap-1 ${sensor.includes("humidity") ? "font-bold text-[#DA1E28]" : ""}`}
+                >
+                  <p className="font-light">Humidity</p>
+                  <p className="text-lg font-medium">
+                    {data.humidity === 999999 ? "--" : data.humidity}
+                  </p>
+                </div>
+                <div
+                  className={`gap-1 ${sensor.includes("pressure") ? "font-bold text-[#DA1E28]" : ""}`}
+                >
+                  <p className="font-light">Pressure</p>
+                  <p className="text-lg font-medium">
+                    {data.pressure === 999999 ? "--" : data.pressure}
+                  </p>
+                </div>
+                <div
+                  className={`gap-1 ${sensor.includes("windSpeed") ? "font-bold text-[#DA1E28]" : ""}`}
+                >
+                  <p className="font-light">Wind Speed</p>
+                  <p className="text-lg font-medium">
+                    {data.windSpeed === 999999 ? "--" : data.windSpeed}
+                  </p>
+                </div>
+                <div
+                  className={`gap-1 ${sensor.includes("windDirection") ? "font-bold text-[#DA1E28]" : ""}`}
+                >
+                  <p className="font-light">Wind Direction</p>
+                  <p className="text-lg font-medium">
+                    {data.windDirection === 999999 ? "--" : data.windDirection}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-stretch">
+                <Button
+                  text="Diagnose"
+                  onClick={() => handleDiagnoseAlert(id, data)}
+                />
+              </div>
+            </div>
+          </FloatingWindow>
+        </div>
+      );
+    };
+    const CustomOverlay = ({ children, handleExitClick }) => {
+      return (
+        <div
+          className="fixed top-0 left-0 z-100 h-full w-full bg-black/50 p-4"
+          onClick={handleExitClick}
+        >
+          <button
+            className="fixed top-4 right-4 cursor-pointer"
+            onClick={handleExitClick}
+          >
+            <X size={32} color={"white"} />
+          </button>
+          <div
+            className={`z-50 mr-30 flex items-start justify-end gap-5 overflow-y-auto`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isAlertsDetailsDisplayed && <AlertTab />}
+            <FloatingWindow>{children}</FloatingWindow>
+          </div>
+        </div>
+      );
+    };
+    return (
+      <CustomOverlay
+        handleExitClick={() => setIsNotificationOverlayDisplayed(false)}
+      >
+        <div className="-my-10 flex h-lvh w-full flex-col items-center justify-start gap-2 p-5">
+          <p className="my-5 text-xl font-bold">Notifications</p>
+          {alertsList.length !== 0 ? (
+            alertsList.map((alert) => (
+              <NotificationTab key={alert.id} alert={alert} />
+            ))
+          ) : (
+            <p className="font-light opacity-50">
+              You currently have no alerts
+            </p>
+          )}
+        </div>
+      </CustomOverlay>
+    );
+  };
+  const AlertNotification = () => {
+    return (
+      <Overlay handleExitClick={() => setIsNewAlertDisplayed(false)}>
+        <div>
+          <p>Abnormal behaviour detected, please check for new alerts</p>
+        </div>
+      </Overlay>
+    );
+  };
 
   return (
     <div className="font-sfpro flex h-svh">
@@ -592,6 +975,8 @@ export default function Home() {
       <Sidebar />
       {isMainContentDisplayed && <MainContent />}
       {isGraphOverlayDisplayed && <GraphOverlay />}
+      {isNotificationOverlayDisplayed && <NotificationsOverlay />}
+      {isNewAlertDisplayed && <AlertNotification />}
       <Logos />
     </div>
   );
