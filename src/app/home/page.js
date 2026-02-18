@@ -42,6 +42,7 @@ import { db } from "@/api/route";
 import Graph from "@/components/Graph";
 import { SyncLoader } from "react-spinners";
 import { handlePredictData } from "@/utils/predict";
+import Image from "next/image";
 
 export default function Home() {
   // STATES
@@ -588,7 +589,12 @@ export default function Home() {
         <div>
           <div className="mb-15 flex items-center justify-center">
             <FloatingWindow className="!bg-background flex-row gap-4 shadow-lg/30 drop-shadow-none">
-              <PAGASA size={24} />
+              <Image
+                src="/logo_black.png"
+                alt="project awsome logo"
+                width={62}
+                height={32}
+              />
               <p className="text-xl font-semibold">Home</p>
             </FloatingWindow>
           </div>
@@ -874,7 +880,9 @@ export default function Home() {
       };
 
       return (
-        <div className="relative flex flex-col items-start justify-center gap-2 rounded-lg bg-gray-200 p-3 transition-all hover:bg-gray-300">
+        <div
+          className={`relative flex flex-col items-start justify-center gap-2 rounded-lg bg-gray-200 p-3 transition-all hover:mr-3 hover:bg-gray-300 ${!read ? "ml-3" : ""}`}
+        >
           {!read ? (
             <span className="absolute -top-9 -right-9">
               <Dot size={80} color="red" />
@@ -996,7 +1004,7 @@ export default function Home() {
             <X size={32} color={"white"} />
           </button>
           <div
-            className={`z-50 mr-30 flex items-start justify-end gap-5 overflow-y-auto`}
+            className={"z-50 mr-30 flex items-start justify-end gap-5"}
             onClick={(e) => e.stopPropagation()}
           >
             {isAlertsDetailsDisplayed && <AlertTab />}
@@ -1011,15 +1019,17 @@ export default function Home() {
       >
         <div className="-my-10 flex h-lvh w-full flex-col items-center justify-start gap-2 p-5">
           <p className="my-5 text-xl font-bold">Notifications</p>
-          {alertsList.length !== 0 ? (
-            alertsList.map((alert) => (
-              <NotificationTab key={alert.id} alert={alert} />
-            ))
-          ) : (
-            <p className="font-light opacity-50">
-              You currently have no alerts
-            </p>
-          )}
+          <div className="min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-5 pb-5">
+            {alertsList.length !== 0 ? (
+              alertsList.map((alert) => (
+                <NotificationTab key={alert.id} alert={alert} />
+              ))
+            ) : (
+              <p className="font-light opacity-50">
+                You currently have no alerts
+              </p>
+            )}
+          </div>
         </div>
       </CustomOverlay>
     );
@@ -1027,8 +1037,9 @@ export default function Home() {
   const AlertNotification = () => {
     return (
       <Overlay handleExitClick={() => setIsNewAlertDisplayed(false)}>
-        <div>
+        <div className="flex flex-col items-center justify-center">
           <p>Abnormal behaviour detected, please check for new alerts</p>
+          <Button text="OK" onClick={() => setIsNewAlertDisplayed(false)} />
         </div>
       </Overlay>
     );
