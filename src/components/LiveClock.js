@@ -4,9 +4,14 @@ class LiveClock extends Component {
   constructor(props) {
     super(props);
 
+    const now = new Date();
     this.state = {
-      time: new Date().toLocaleTimeString(),
-      date: new Date().toLocaleDateString("en-CA"), // Forces YYYY-MM-DD format
+      time: now.toLocaleTimeString(),
+      date: now.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
     };
   }
 
@@ -22,7 +27,11 @@ class LiveClock extends Component {
     const now = new Date();
     this.setState({
       time: now.toLocaleTimeString(),
-      date: now.toLocaleDateString("en-CA"),
+      date: now.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
     });
   }
 
@@ -33,10 +42,10 @@ class LiveClock extends Component {
   render() {
     return (
       <div>
-        <h2 className="font-mono font-bold text-2xl font-primary">
+        <h2 className="font-primary font-mono text-sm font-bold">
           {this.state.time}
         </h2>
-        <p className="font-semibold text-xs">{this.state.date}</p>
+        <p className="text-xs">{this.state.date}</p>
       </div>
     );
   }

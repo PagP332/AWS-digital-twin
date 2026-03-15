@@ -10,6 +10,7 @@ export async function handlePredictData(payload, stationID) {
   //     "windDirection": 278,
   //     "precipitation": 0
   // }
+  // console.log(payload);
   const errorValue = 999999;
   try {
     const formattedPayload = {
@@ -35,8 +36,10 @@ export async function handlePredictData(payload, stationID) {
           : errorValue,
       windDirection:
         typeof payload.find((item) => item.data === "Wind Direction").value ===
-        "number"
-          ? payload.find((item) => item.data === "Wind Direction").value
+          "string" ||
+        payload.find((item) => item.data === "Wind Direction").value ===
+          "number"
+          ? Number(payload.find((item) => item.data === "Wind Direction").value)
           : errorValue,
       precipitation:
         typeof payload.find((item) => item.data === "Precipitation").value ===
@@ -51,6 +54,7 @@ export async function handlePredictData(payload, stationID) {
       return null;
     }
 
+    // console.log(request);
     const { code, label, request } = res.data;
     const latestTime = await latestDateTime(payload);
 

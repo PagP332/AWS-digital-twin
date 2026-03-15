@@ -5,7 +5,14 @@ import Logos, { PAGASA } from "@/components/Logos";
 // import Map from "@/components/Map";
 import Overlay from "@/components/Overlay";
 import StatusIndicator from "@/components/StatusIndicator";
-import { CloudSun, Settings, X, Dot, TriangleAlert } from "lucide-react";
+import {
+  CloudSun,
+  Settings,
+  X,
+  Dot,
+  TriangleAlert,
+  CircleQuestionMark,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import React, {
@@ -79,6 +86,8 @@ export default function Home() {
   const [isAlertsDetailsDisplayed, setIsAlertsDetailsDisplayed] =
     useState(false);
   const [isOtherDataDisplayed, setIsOtherDataDisplayed] = useState(false);
+  const [isShowAllCells, setIsShowAllCells] = useState(false);
+  const [isInstructionsDisplayed, setIsInstructionsDisplayed] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -246,6 +255,7 @@ export default function Home() {
   const uniqueSensors = useMemo(() => {
     const set = new Set();
     (alertsList || []).forEach((a) => {
+      if (a?.resolved) return;
       const sensors = Array.isArray(a.sensor) ? a.sensor : [];
       sensors.forEach((s) => {
         if (typeof s === "string" && s.length) set.add(s);
@@ -490,7 +500,36 @@ export default function Home() {
     );
   };
   const DataCell = ({ data, index, dataContext, details }) => {
-    let value, unit;
+    let value, unit, parameter;
+    switch (index) {
+      case 0:
+        // console.log("Precipitation");
+        parameter = "precipitation";
+        break;
+      case 1:
+        // console.log("Temperature");
+        parameter = "temperature";
+        break;
+      case 2:
+        // console.log("Humidity");
+        parameter = "humidity";
+        break;
+      case 3:
+        // console.log("Pressure");
+        parameter = "pressure";
+        break;
+      case 4:
+        // console.log("Wind Speed");
+        parameter = "windSpeed";
+        break;
+      case 5:
+        // console.log("Wind Direction");
+        parameter = "windDirection";
+        break;
+    }
+
+    const isAnomaly = uniqueSensors.includes(parameter);
+
     if (data.data === "Wind Direction") {
       const windSpeed =
         dataContext.find((d) => d.data === "Wind Speed")?.value || 0;
@@ -500,28 +539,44 @@ export default function Home() {
         value = "--";
         unit = "";
       } else {
-        value = data.value;
+        value = Number(data.value).toFixed(4);
         unit = data.unit;
       }
     } else {
       value = data.value.toFixed(4);
       unit = data.unit;
     }
-    if (parameterSelectedIndex === index) {
+    if (parameterSelectedIndex === index || isShowAllCells) {
       // console.log("parameter selected");
       return (
         <div
           onClick={() => setParameterSelectedIndex(null)}
           className={`z-50 ml-2 flex h-fit w-fit cursor-pointer flex-col rounded-xl bg-white p-2 px-4 shadow-lg/10 drop-shadow-none`}
         >
-          <p className="text-s text-left font-light whitespace-nowrap">
+          <p
+            className={`text-s text-left font-light whitespace-nowrap ${isAnomaly ? "text-red-500" : ""}`}
+          >
             {data.data}
           </p>
+          {isAnomaly ? (
+            <p
+              className={`text-left text-xs font-light whitespace-nowrap ${isAnomaly ? "text-red-500" : ""}`}
+            >
+              Abnormal
+            </p>
+          ) : (
+            <p className={"text-left text-xs font-light whitespace-nowrap"}>
+              Normal
+            </p>
+          )}
           <div className="flex flex-row items-center justify-between gap-10">
-            <p className="flex text-left text-xl font-semibold whitespace-nowrap">
+            <p
+              className={`flex text-left text-xl font-semibold whitespace-nowrap ${isAnomaly ? "text-red-500" : ""}`}
+            >
               {value}
               {unit}
             </p>
+
             {details && (
               <Button
                 text="Details"
@@ -540,10 +595,14 @@ export default function Home() {
           onClick={() => handleDataCellOnClick({ data, index })}
           className={`hover:bg-accent z-50 flex h-fit w-fit min-w-full cursor-pointer flex-col rounded-xl bg-white p-2 px-4 shadow-lg/10 drop-shadow-none transition-all hover:ml-2 hover:text-white`}
         >
-          <p className="text-left text-xs font-light whitespace-nowrap">
+          <p
+            className={`text-left text-xs font-light whitespace-nowrap ${isAnomaly ? "text-red-500" : ""}`}
+          >
             {data.data}
           </p>
-          <p className="text-s text-left font-semibold whitespace-nowrap">
+          <p
+            className={`text-s text-left font-semibold whitespace-nowrap ${isAnomaly ? "text-red-500" : ""}`}
+          >
             {value}
             {unit}
           </p>
@@ -579,6 +638,20 @@ export default function Home() {
         onClick={() => setIsNotificationOverlayDisplayed(true)}
         className={`!text-2xl !font-semibold ${unreadAlerts ? "!bg-accent" : "!bg-white !text-black"}`}
       />
+    );
+  };
+  const Instructions = () => {
+    return (
+      <Overlay handleExitClick={() => setIsInstructionsDisplayed(false)}>
+        <div>
+          <Image
+            src="/instructions.png"
+            alt="instructions"
+            width={453}
+            height={356}
+          />
+        </div>
+      </Overlay>
     );
   };
 
@@ -622,7 +695,13 @@ export default function Home() {
           </SidebarTabs>
           <div className="flex flex-col gap-1">
             <p className="mt-4 mb-2 text-xs opacity-50">LEARN MORE</p>
-            <p className="text-xs font-medium">About Us</p>
+            <Link
+              className="w-fit text-xs font-medium"
+              target="_blank"
+              href="https://aws-instruction.appwrite.network/#about"
+            >
+              About Us
+            </Link>
             <Link
               className="w-fit text-xs font-medium"
               target="_blank"
@@ -693,8 +772,14 @@ export default function Home() {
           </p>
         </div>
         <div className="flex-1 items-center justify-center text-center">
-          <p className="text-xs font-semibold">Current Time</p>
-          <LiveClock />
+          <p className="text-sm font-light">Last Observed</p>
+          <p className="text-2xl font-semibold">{lastObserved}</p>
+          <div
+            className="cursor-pointer"
+            onClick={() => setIsInstructionsDisplayed(true)}
+          >
+            <CircleQuestionMark size={18} className="inline-block opacity-50" />
+          </div>
         </div>
         <div className="flex flex-1 flex-col items-end text-end">
           <StatusIndicator
@@ -702,8 +787,8 @@ export default function Home() {
             type={lastObserved === "Not Available" ? "unknown" : "active"}
           />
           <div className="mt-1 opacity-50">
-            <p className="text-sm font-semibold">Last Observed</p>
-            <p className="text-xs font-light">{lastObserved}</p>
+            <p className="text-xs font-semibold">Current Time</p>
+            <LiveClock />
           </div>
         </div>
       </TwinFloatingWindow>
@@ -733,7 +818,7 @@ export default function Home() {
               </p>
             </div>
           )}
-          <div className="absolute top-50 right-5 z-80 inline-flex items-center gap-2">
+          <div className="absolute top-50 right-5 z-80 inline-flex flex-col items-center gap-2">
             <div className="relative">
               {unreadAlerts && (
                 <span className="absolute -top-8 -left-10 z-1">
@@ -742,6 +827,11 @@ export default function Home() {
               )}
               <AlertButton />
             </div>
+            <Button
+              text="Show All"
+              className={"!border-2"}
+              onClick={() => setIsShowAllCells((prev) => !prev)}
+            />
           </div>
         </div>
       );
@@ -1053,6 +1143,7 @@ export default function Home() {
       {isGraphOverlayDisplayed && <GraphOverlay />}
       {isNotificationOverlayDisplayed && <NotificationsOverlay />}
       {isNewAlertDisplayed && <AlertNotification />}
+      {isInstructionsDisplayed && <Instructions />}
       <Logos />
     </div>
   );
