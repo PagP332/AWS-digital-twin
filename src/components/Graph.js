@@ -33,12 +33,36 @@ export default function Graph({ data = [], stationID, className, ...props }) {
   const xAxisData = cleanedData.map((d) => d.date);
   const yAxisData = cleanedData.map((d) => d.value);
 
+  const yMinData = yAxisData.length ? Math.min(...yAxisData) : 0;
+  const yMaxData = yAxisData.length ? Math.max(...yAxisData) : 1;
+  const span = yMaxData - yMinData;
+  const center = (yMinData + yMaxData) / 2;
+
+  // Tune these to match your preferred "flatness"
+  const minVisualSpan = 10; // force at least 10 units total height
+  const padPct = 0.08; // 8% top/bottom padding for normal ranges
+
+  let yMin;
+  let yMax;
+
+  if (span < minVisualSpan) {
+    // Near-equal values: center and widen to avoid exaggerated wiggles
+    yMin = center - minVisualSpan / 2;
+    yMax = center + minVisualSpan / 2;
+  } else {
+    // Real large variation (including spikes): keep natural scale + small padding
+    const pad = span * padPct;
+    yMin = yMinData - pad;
+    yMax = yMaxData + pad;
+  }
+
   return (
     <div
       className={`flex h-fit w-fit items-center justify-center ${className}`}
     >
       <LineChart
         xAxis={[{ data: xAxisData, label: "Datetime", scaleType: "time" }]}
+        yAxis={[{ min: yMin, max: yMax }]}
         series={[{ data: yAxisData, label: "Value", color: "#514fbc" }]}
         width={800}
         height={400}

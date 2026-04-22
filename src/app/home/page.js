@@ -50,6 +50,7 @@ import Graph from "@/components/Graph";
 import { SyncLoader } from "react-spinners";
 import { handlePredictData } from "@/utils/predict";
 import Image from "next/image";
+import FilterContainer from "@/components/FilterContainer";
 
 export default function Home() {
   // STATES
@@ -72,6 +73,8 @@ export default function Home() {
   const [graphDataRef, setGraphDataRef] = useState([]);
   const [graphParameterInfo, setGraphParameterInfo] = useState(null);
   const [filterGraph, setFilterGraph] = useState(5);
+  const [fromFilterValue, setFromFilterValue] = useState(new Date());
+  const [toFilterValue, setToFilterValue] = useState(new Date());
 
   const [parameterSelectedIndex, setParameterSelectedIndex] = useState(null);
 
@@ -88,6 +91,7 @@ export default function Home() {
   const [isOtherDataDisplayed, setIsOtherDataDisplayed] = useState(false);
   const [isShowAllCells, setIsShowAllCells] = useState(false);
   const [isInstructionsDisplayed, setIsInstructionsDisplayed] = useState(false);
+  const [isFilterWindowDisplayed, setIsFilterWindowDisplayed] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -174,6 +178,10 @@ export default function Home() {
       return;
     }
   };
+  const handleOnFilterChange = () => {
+    const filteredData = dataCleanup(graphDataRef, filterGraph);
+    setGraphData(filteredData);
+  }
 
   // UTILITY
   const getLatestDatetime = useCallback(
@@ -215,6 +223,13 @@ export default function Home() {
     },
     [selectedStationID],
   );
+  const toDateObj = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value?.toDate === "function") return value.toDate(); // Firestore Timestamp
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
   const dataCleanup = (data, filterGraph = 5) => {
     if (!data || data.length === 0) return [];
 
@@ -239,18 +254,40 @@ export default function Home() {
         cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
       case 5: // All data
+      case 6:
       default:
         cutoff = null;
         break;
     }
 
-    // Filter data (if cutoff exists)
-    const filtered = cutoff
-      ? data.filter((e) => new Date(e[timeKey]) >= cutoff)
-      : data;
+    // // Filter data (if cutoff exists)
+    // const filtered = cutoff
+    //   ? data.filter((e) => new Date(e[timeKey]) >= cutoff)
+    //   : data;
 
-    // Map to unified format and reverse for ascending order
-    return filtered.sort((a, b) => new Date(a[timeKey]) - new Date(b[timeKey]));
+    // // Map to unified format and reverse for ascending order
+    // return filtered.sort((a, b) => new Date(a[timeKey]) - new Date(b[timeKey]));
+    let start = toDateObj(fromFilterValue);
+    let end = toDateObj(toFilterValue);
+
+    if (start && end && start > end) [start, end] = [end, start];
+
+    return data
+      .filter((e) => {
+        const itemDate = toDateObj(e[timeKey]);
+        if (!itemDate) return false;
+
+        // Preset filters for 1-5
+        if (filterGraph !== 6) {
+          return cutoff ? itemDate >= cutoff : true;
+        }
+
+        // Custom date range only for filterGraph = 6
+        const inFrom = start ? itemDate >= start : true;
+        const inTo = end ? itemDate <= end : true;
+        return inFrom && inTo;
+      })
+      .sort((a, b) => toDateObj(a[timeKey]) - toDateObj(b[timeKey]));
   };
   const uniqueSensors = useMemo(() => {
     const set = new Set();
@@ -387,8 +424,7 @@ export default function Home() {
   }, [selectedStationID]);
 
   useEffect(() => {
-    const filteredData = dataCleanup(graphDataRef, filterGraph);
-    setGraphData(filteredData);
+    handleOnFilterChange()
     // console.log(graphData);
   }, [filterGraph, graphDataRef]);
 
@@ -621,13 +657,57 @@ export default function Home() {
         </div>
       );
     };
+    const FilterWindow = () => {
+      const [localFromFilterValue, setLocalFromFilterValue] =
+        useState(fromFilterValue);
+      const [localToFilterValue, setLocalToFilterValue] =
+        useState(toFilterValue);
+
+      return (
+        <Overlay handleExitClick={() => setIsFilterWindowDisplayed(false)}>
+          <div className="items-bg-center mb-2 flex w-full flex-col justify-center gap-0">
+            <p className="text-sm font-semibold">Filter data from</p>
+            <FilterContainer
+              value={localFromFilterValue}
+              onChange={setLocalFromFilterValue}
+            />
+            <p className="text-sm font-semibold">to</p>
+            <FilterContainer
+              value={localToFilterValue}
+              onChange={setLocalToFilterValue}
+            />
+          </div>
+          <Button
+            text="Apply"
+            onClick={() => {
+              setFromFilterValue(localFromFilterValue);
+              setToFilterValue(localToFilterValue);
+              setIsFilterWindowDisplayed(false);
+              if (filterGraph === 6) {
+                handleOnFilterChange()
+              } else {
+                setFilterGraph(6);
+              }
+            }}
+          />
+        </Overlay>
+      );
+    };
     return (
-      <div className="flex justify-end gap-1">
-        <Button ind={1} text="1h" onClick={() => setFilterGraph(1)} />
-        <Button ind={2} text="24h" onClick={() => setFilterGraph(2)} />
-        <Button ind={3} text="7d" onClick={() => setFilterGraph(3)} />
-        <Button ind={4} text="1m" onClick={() => setFilterGraph(4)} />
-        <Button ind={5} text="ALL" onClick={() => setFilterGraph(5)} />
+      <div>
+        <div className="relative flex justify-end gap-1">
+          <Button ind={1} text="1h" onClick={() => setFilterGraph(1)} />
+          <Button ind={2} text="24h" onClick={() => setFilterGraph(2)} />
+          <Button ind={3} text="7d" onClick={() => setFilterGraph(3)} />
+          <Button ind={4} text="1m" onClick={() => setFilterGraph(4)} />
+          <Button ind={5} text="ALL" onClick={() => setFilterGraph(5)} />
+          <Button
+            ind={6}
+            text="▼"
+            onClick={() => setIsFilterWindowDisplayed((prev) => !prev)}
+          />
+        </div>
+        {isFilterWindowDisplayed && <FilterWindow />}
       </div>
     );
   };
