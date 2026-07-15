@@ -466,7 +466,7 @@ export default function Canvas3D({
     }, [scene, registerBaseColor]);
 
     useEffect(() => {
-      const isSelected = selectedIndex === index || selectedIndex === index+1;
+      const isSelected = selectedIndex === index || selectedIndex === index + 1;
 
       scene.traverse((child) => {
         if (child.isMesh && child.material) {
@@ -525,6 +525,7 @@ export default function Canvas3D({
         <OrbitControls enablePan={false} maxDistance={50} target={[0, 26, 0]} />
       </Canvas>
     ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

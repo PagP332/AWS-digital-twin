@@ -423,6 +423,7 @@ export default function Home() {
     })();
   }, [selectedStationID]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     handleOnFilterChange()
     // console.log(graphData);

@@ -37,6 +37,11 @@ export default function Home() {
           className="!bg-accent"
         />
         <p>or</p>
+        <Button
+          text="Continue as Guest"
+          className="!border-accent !border-2 !bg-white !text-black"
+          onClick={() => router.push("/home")}
+        />
         <Button text="Create New User" onClick={() => router.push("/new")} />
       </FloatingWindow>
       <p className="absolute bottom-14 text-xs opacity-50">
